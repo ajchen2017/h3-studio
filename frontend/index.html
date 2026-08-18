@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>H3 Studio</title>
+<style>
+  :root {
+    --bg: #14151A; --panel: #1B1D24; --panel-raised: #23262F; --line: #333644;
+    --text: #EDEAE3; --text-dim: #93949E; --text-faint: #5E6069;
+    --accent: #E8935A; --accent-strong: #F2A96F; --accent-soft: rgba(232,147,90,0.13);
+    --success: #6FBF8B; --success-soft: rgba(111,191,139,0.14);
+    --warning: #E0B84D; --warning-soft: rgba(224,184,77,0.14);
+    --error: #E0665C; --error-soft: rgba(224,102,92,0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+    font-size: 14.5px; line-height: 1.55;
+  }
+  .mono { font-family: "Consolas", "Cascadia Mono", ui-monospace, monospace; }
+  .app { max-width: 1180px; margin: 0 auto; padding: 22px 24px 60px; }
+  .header { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 24px; flex-wrap: wrap; }
+  .brand-mark { font-family: "Consolas", monospace; font-weight: 600; font-size: 17px; }
+  .brand-mark .accent-dot { color: var(--accent); }
+  .brand-sub { font-size: 12px; color: var(--text-faint); margin-left: 10px; }
+  .status-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-family: "Consolas", monospace;
+    font-size: 11.5px; color: var(--text-dim); background: var(--panel-raised); border: 1px solid var(--line);
+    border-radius: 3px; padding: 5px 9px; }
+  .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+    box-shadow: 0 0 0 3px var(--success-soft); }
+  .grid { display: grid; grid-template-columns: 420px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px;
+    border-bottom: 1px solid var(--line); background: var(--panel-raised); }
+  .panel-title { font-family: "Consolas", monospace; font-size: 11.5px; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--text-dim); }
+  .panel-body { padding: 18px 16px 20px; display: flex; flex-direction: column; gap: 18px; }
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field-label { display: flex; align-items: baseline; justify-content: space-between; font-family: "Consolas", monospace;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); }
+  .field-label .hint { font-family: inherit; text-transform: none; letter-spacing: 0; color: var(--text-faint); font-size: 11.5px; }
+  textarea, input[type=text], input[type=number] {
+    width: 100%; background: var(--panel-raised); border: 1px solid var(--line); border-radius: 5px;
+    color: var(--text); font-family: inherit; font-size: 13.5px; padding: 9px 10px;
+  }
+  textarea { min-height: 110px; resize: vertical; }
+  input[type=file] { font-size: 12.5px; color: var(--text-dim); }
+  .ref-image-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ref-image-slot {
+    position: relative; width: 72px; height: 72px; border-radius: 5px; overflow: hidden;
+    border: 1px solid var(--line); background: var(--panel-raised); flex-shrink: 0;
+  }
+  .ref-image-slot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ref-image-tag {
+    position: absolute; left: 4px; bottom: 4px; font-family: "Consolas", monospace; font-size: 9.5px;
+    color: #F0EEE8; background: rgba(0,0,0,0.6); padding: 2px 5px; border-radius: 3px;
+  }
+  .ref-image-remove {
+    position: absolute; top: 3px; right: 3px; width: 17px; height: 17px; border-radius: 50%;
+    border: none; background: rgba(0,0,0,0.6); color: #F0EEE8; font-size: 11px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .ref-image-remove:hover { background: var(--error); }
+  select {
+    width: 100%; background: var(--panel-raised); border: 1px solid var(--line); border-radius: 5px;
+    color: var(--text); font-family: inherit; font-size: 12.5px; padding: 8px 10px;
+  }
+  #templateEditor { font-size: 12.5px; line-height: 1.6; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .toggle-group { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+  .toggle-opt { padding: 7px 11px; font-family: "Consolas", monospace; font-size: 12px; color: var(--text-dim);
+    cursor: pointer; border-right: 1px solid var(--line); background: var(--panel-raised); }
+  .toggle-opt:last-child { border-right: none; }
+  .toggle-opt.on { background: var(--accent-soft); color: var(--accent-strong); }
+  .check-row { display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px; background: var(--panel-raised);
+    border: 1px solid var(--line); border-radius: 5px; }
+  .check-row .check-title { font-size: 12.5px; }
+  .check-row .check-desc { font-size: 11.5px; color: var(--text-faint); }
+  .btn-generate { display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--accent);
+    color: #1A120A; border: none; border-radius: 5px; padding: 12px 18px; font-family: "Consolas", monospace;
+    font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-generate:hover { background: var(--accent-strong); }
+  .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
+  .est-line { text-align: center; font-size: 11.5px; color: var(--text-faint); }
+  .queue { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line);
+    border-radius: 5px; overflow: hidden; }
+  .seg-row { display: grid; grid-template-columns: 28px 1fr auto auto; align-items: center; gap: 12px;
+    background: var(--panel); padding: 11px 13px; }
+  .seg-index { font-family: "Consolas", monospace; font-size: 11px; color: var(--text-faint); }
+  .seg-time { font-family: "Consolas", monospace; font-size: 11.5px; color: var(--text-faint); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-family: "Consolas", monospace; font-size: 10.5px;
+    padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .pill.done { background: var(--success-soft); color: var(--success); }
+  .pill.running { background: var(--accent-soft); color: var(--accent-strong); }
+  .pill.pending { background: var(--panel-raised); color: var(--text-faint); border: 1px solid var(--line); }
+  .pill.error { background: var(--error-soft); color: var(--error); }
+  video { width: 100%; border-radius: 6px; border: 1px solid var(--line); background: #000; }
+  .btn-download { display: inline-flex; align-items: center; gap: 7px; background: transparent; border: 1px solid var(--line);
+    color: var(--text); border-radius: 5px; padding: 7px 12px; font-family: "Consolas", monospace; font-size: 12px;
+    cursor: pointer; text-decoration: none; }
+  .msg { font-size: 12.5px; padding: 8px 10px; border-radius: 5px; }
+  .msg.error { background: var(--error-soft); color: var(--error); }
+  .empty-state { color: var(--text-faint); font-size: 12.5px; padding: 20px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div><span class="brand-mark">H3<span class="accent-dot">·</span>STUDIO</span><span class="brand-sub">本機影音生成控制台</span></div>
+    <div class="status-chips">
+      <span class="chip" id="comfyStatusChip"><span class="chip-dot" id="comfyStatusDot"></span><span id="comfyStatusText">ComfyUI 檢查中...</span></span>
+      <span class="chip"><span class="chip-dot"></span>RTX 5060 Ti · 16GB</span>
+      <span class="chip"><span class="chip-dot"></span>Ref2VA + Turbo LoRA</span>
+      <span class="chip" title="實測比不裝慢，暫停用"><span class="chip-dot" style="background:var(--text-faint);box-shadow:none"></span>SageAttention 已停用（實測較慢）</span>
+      <span class="chip" id="gpuChip"><span class="chip-dot" id="gpuDot"></span><span id="gpuText">GPU —</span></span>
+      <span class="chip" id="ramChip"><span class="chip-dot" id="ramDot"></span><span id="ramText">RAM —</span></span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">輸入</span></div>
+      <div class="panel-body">
+        <div class="field">
+          <div class="field-label"><span>Prompt 範本庫</span><span class="hint">1人 / 2人 / 3人 / 多人</span></div>
+          <div class="toggle-group" id="templateCategoryToggle">
+            <div class="toggle-opt on" data-cat="1">1人</div>
+            <div class="toggle-opt" data-cat="2">2人</div>
+            <div class="toggle-opt" data-cat="3">3人</div>
+            <div class="toggle-opt" data-cat="multi">多人</div>
+          </div>
+          <select id="templateSelect"></select>
+          <textarea id="templateEditor" placeholder="範本內容..." style="min-height:150px"></textarea>
+          <div class="row">
+            <button class="btn-download" id="templateApplyBtn" type="button">套用到 Prompt ↓</button>
+            <button class="btn-download" id="templateSaveBtn" type="button">另存新範本</button>
+            <button class="btn-download" id="templateDeleteBtn" type="button">刪除此範本</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>Prompt（正式送出用）</span></div>
+          <textarea id="prompt" placeholder="描述場景、動作、對白/歌聲..."></textarea>
+          <div class="row">
+            <button class="btn-download" id="translateToEnBtn" type="button">中 → 英</button>
+            <button class="btn-download" id="translateToZhBtn" type="button">英 → 中</button>
+            <button class="btn-download" id="resetLangBtn" type="button">還原原文</button>
+            <span class="hint" id="translateStatus"></span>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>參考圖片（可多人，最多 3 張）</span></div>
+          <input type="file" id="refImages" accept="image/*" multiple />
+          <div id="refImagesPreview" class="ref-image-grid" style="margin-top:6px"></div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>參考語音（單一聲音）</span></div>
+          <input type="file" id="refAudio" accept="audio/*" />
+          <div class="hint-note">或用下方「語音 Profile」現場錄一段、選一個已存的聲音</div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>語音 Profile 錄製</span></div>
+          <div class="row">
+            <select id="micSelect" style="flex:1"></select>
+            <button class="btn-download" id="micRefreshBtn" type="button">重新整理裝置</button>
+          </div>
+          <div class="field-label" style="margin-top:4px"><span>照著念（約20秒或更短）</span></div>
+          <textarea id="recordScript" style="min-height:70px">大家好，我叫小明，今天天氣很好，我想出去走走看看。東西南北、春夏秋冬，一二三四五六七八九十。謝謝大家聽我做這段聲音測試。</textarea>
+          <div class="row">
+            <button class="btn-generate" id="recordBtn" type="button" style="flex:none; padding:9px 16px">● 開始錄音</button>
+            <span class="mono" id="recordTimer">00:00 / 00:20</span>
+            <span class="hint" id="recordStatus"></span>
+          </div>
+          <div id="recordPreviewArea"></div>
+          <div class="row" id="saveProfileRow" style="display:none">
+            <input type="text" id="profileNameInput" placeholder="Profile 名稱" style="flex:1" />
+            <button class="btn-download" id="saveProfileBtn" type="button">存成 Profile</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>已存語音 Profile</span><span class="hint" id="selectedProfileHint"></span></div>
+          <div class="queue" id="profileList"><div class="empty-state">尚無 Profile</div></div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>背景音樂（已驗證有效）</span></div>
+          <input type="file" id="bgMusic" accept="audio/*" />
+          <div class="hint-note" style="font-size:11px;color:var(--text-faint);margin-top:2px">
+            會自動裁切成分段長度，接到獨立的 ref_audio_1 插槽（跟人聲分開）。已實測生成結果確實抓到參考旋律的味道——
+            建議在 prompt 的 non_diegetic_music 段落明確描述，例如「the score follows the mood and rhythm of the reference track」，效果更穩定。
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>參考影片（延伸現有影片用，可留空）</span></div>
+          <input type="file" id="refVideo" accept="video/*" />
+          <div class="check-row">
+            <input type="checkbox" id="useRefVideoDirect" />
+            <label for="useRefVideoDirect" style="display:flex;flex-direction:column;gap:3px;cursor:pointer">
+              <span class="check-title">啟用參考影片直接分析（實驗性）</span>
+              <span class="check-desc">預設關閉時改用「影片最後一幀擷取成參考圖片」，這是已驗證有效的做法</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>影片長度（分鐘）</span></div>
+          <div class="row">
+            <input type="number" id="durationMinutes" value="1" min="0.25" step="0.25" style="width:90px" />
+            <span class="field-label" style="margin:0">分段長度</span>
+            <input type="number" id="segmentLength" value="15" min="5" max="15" style="width:70px" />
+            <span class="hint">秒/段</span>
+            <span class="hint mono" id="segmentCountHint" style="margin-left:auto"></span>
+          </div>
+          <div class="row">
+            <button class="btn-download" id="quick15sBtn" type="button">15秒單段測試</button>
+            <span class="hint">一鍵設成 0.25 分鐘 × 15秒/段 = 1 段，跑最快的測試</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>輸出格式</span></div>
+          <div class="row">
+            <span class="hint">解析度</span>
+            <div class="toggle-group" id="resToggle">
+              <div class="toggle-opt on" data-w="864" data-h="480">864×480 原生</div>
+              <div class="toggle-opt" data-w="1280" data-h="720">1280×720 放大</div>
+            </div>
+          </div>
+          <div class="row">
+            <span class="hint">影格率</span>
+            <div class="toggle-group" id="fpsToggle">
+              <div class="toggle-opt on" data-fps="24">24fps 原生</div>
+              <div class="toggle-opt" data-fps="30">30fps</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-generate" id="generateBtn">開始生成</button>
+        <div class="est-line" id="estLine"></div>
+        <div id="errorMsg"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">輸出</span></div>
+      <div class="panel-body">
+        <div class="field">
+          <div class="field-label"><span>分段佇列</span><span class="hint" id="queueHint"></span></div>
+          <div class="queue" id="queueList"><div class="empty-state">尚未開始生成</div></div>
+        </div>
+        <div class="field">
+          <div class="field-label"><span>結果</span></div>
+          <div id="videoArea"><div class="empty-state">生成完成後會顯示在這裡</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";
+
+// ---------- ComfyUI health check (fail fast, before the user fills out the whole form) ----------
+let comfyUiAlive = false;
+
+async function checkComfyHealth() {
+  const dot = document.getElementById('comfyStatusDot');
+  const text = document.getElementById('comfyStatusText');
+  const genBtn = document.getElementById('generateBtn');
+  try {
+    const res = await fetch(`${API}/api/health`);
+    const j = await res.json();
+    comfyUiAlive = !!j.comfyui_alive;
+  } catch (e) {
+    comfyUiAlive = false;
+  }
+  if (comfyUiAlive) {
+    dot.style.background = 'var(--success)';
+    dot.style.boxShadow = '0 0 0 3px var(--success-soft)';
+    text.textContent = 'ComfyUI 連線正常';
+    genBtn.disabled = false;
+    genBtn.title = '';
+  } else {
+    dot.style.background = 'var(--error)';
+    dot.style.boxShadow = '0 0 0 3px var(--error-soft)';
+    text.textContent = 'ComfyUI 離線 — 無法生成';
+    genBtn.disabled = true;
+    genBtn.title = 'ComfyUI 目前無法連線，請先確認 ComfyUI 是否正在執行';
+  }
+}
+checkComfyHealth();
+setInterval(checkComfyHealth, 10000);
+
+// ---------- GPU / RAM live monitor ----------
+async function updateSystemStats() {
+  try {
+    const res = await fetch(`${API}/api/system-stats`);
+    const j = await res.json();
+
+    const gpuDot = document.getElementById('gpuDot');
+    const gpuText = document.getElementById('gpuText');
+    if (j.gpu) {
+      const hot = j.gpu.util_percent > 90 || j.gpu.mem_percent > 90;
+      gpuDot.style.background = hot ? 'var(--warning)' : 'var(--success)';
+      gpuDot.style.boxShadow = hot ? '0 0 0 3px var(--warning-soft)' : '0 0 0 3px var(--success-soft)';
+      gpuText.textContent = `GPU ${j.gpu.util_percent.toFixed(0)}% · ${(j.gpu.mem_used_mb / 1024).toFixed(1)}/${(j.gpu.mem_total_mb / 1024).toFixed(1)}GB · ${j.gpu.temp_c.toFixed(0)}°C`;
+    } else {
+      gpuDot.style.background = 'var(--text-faint)';
+      gpuDot.style.boxShadow = 'none';
+      gpuText.textContent = 'GPU 無法讀取';
+    }
+
+    const ramDot = document.getElementById('ramDot');
+    const ramText = document.getElementById('ramText');
+    const ramHot = j.ram.percent > 90;
+    ramDot.style.background = ramHot ? 'var(--warning)' : 'var(--success)';
+    ramDot.style.boxShadow = ramHot ? '0 0 0 3px var(--warning-soft)' : '0 0 0 3px var(--success-soft)';
+    ramText.textContent = `RAM ${j.ram.percent.toFixed(0)}% · ${j.ram.used_gb}/${j.ram.total_gb}GB`;
+  } catch (e) {
+    // Non-critical monitor - fail silently rather than spamming the UI.
+  }
+}
+updateSystemStats();
+setInterval(updateSystemStats, 2000);
+
+// ---------- Quick 15s single-segment test preset ----------
+document.getElementById('quick15sBtn').addEventListener('click', () => {
+  document.getElementById('durationMinutes').value = '0.25';
+  document.getElementById('segmentLength').value = '15';
+  updateHints();
+});
+
+// ---------- Prompt template library ----------
+const BUILTIN_TEMPLATES = {
+  "1": [
+    { name: "單人・基本結構", builtin: true, content:
+`subject_definitions:
+<Subject 1> = <Picture 1>, the character (identity fully_preserved)
+
+summary: [一句話描述場景]
+
+detailed_description:
+[Shot 1] <Subject 1> [動作描述]. (S1) says <d>[English] [台詞內容]</d>
+Camera [運鏡描述], natural lighting.
+
+overall_soundscape: [環境音描述]
+
+non_diegetic_music: N/A` },
+  ],
+  "2": [
+    { name: "雙人・家事分配爭吵（已驗證）", builtin: true, content:
+`subject_definitions:
+<Subject 1> = <Picture 1>, the man (identity fully_preserved)
+<Subject 2> = <Picture 2>, the woman (identity fully_preserved)
+
+summary: Two people have a heated argument in a modern living room about the unfair division of household chores.
+
+detailed_description:
+[Shot 1] <Subject 1> stands near the sofa, gesturing with his hands, visibly frustrated, facing <Subject 2>. (S1) says <d>[English] I already do all the dishes every night, you never help with the laundry!</d>
+[Shot 2] <Subject 2> stands facing him near the kitchen counter, arms crossed, equally frustrated. (S2) replies <d>[English] That's not fair — I clean the whole house every weekend while you just watch TV!</d>
+Camera holds a static medium two-shot throughout, natural window light, handheld documentary feel.
+
+overall_soundscape: tense living room ambience, faint distant traffic outside, no underlying music during the dialogue.
+
+non_diegetic_music: N/A` },
+    { name: "雙人・基本結構（空白）", builtin: true, content:
+`subject_definitions:
+<Subject 1> = <Picture 1>, [角色1] (identity fully_preserved)
+<Subject 2> = <Picture 2>, [角色2] (identity fully_preserved)
+
+summary: [兩人場景描述]
+
+detailed_description:
+[Shot 1] <Subject 1> [動作]. (S1) says <d>[English] [台詞1]</d>
+[Shot 2] <Subject 2> [動作]. (S2) says <d>[English] [台詞2]</d>
+Camera [運鏡描述]。
+
+overall_soundscape: [環境音]
+
+non_diegetic_music: N/A` },
+  ],
+  "3": [
+    { name: "三人・基本結構（空白）", builtin: true, content:
+`subject_definitions:
+<Subject 1> = <Picture 1>, [角色1] (identity fully_preserved)
+<Subject 2> = <Picture 2>, [角色2] (identity fully_preserved)
+<Subject 3> = <Picture 3>, [角色3] (identity fully_preserved)
+
+summary: [三人場景描述]
+
+detailed_description:
+[Shot 1] <Subject 1> [動作]. (S1) says <d>[English] [台詞1]</d>
+[Shot 2] <Subject 2> [動作]. (S2) says <d>[English] [台詞2]</d>
+[Shot 3] <Subject 3> [動作]. (S3) says <d>[English] [台詞3]</d>
+
+overall_soundscape: [環境音]
+
+non_diegetic_music: N/A` },
+  ],
+  "multi": [
+    { name: "多人・主角+背景群眾（3張為上限，其餘用文字描述）", builtin: true, content:
+`subject_definitions:
+<Subject 1> = <Picture 1>, [主角1] (identity fully_preserved)
+<Subject 2> = <Picture 2>, [主角2] (identity fully_preserved)
+Additional background people are described in prose only — no dedicated reference photo beyond the 3-image limit (e.g. "a small group of coworkers in the background, out of focus").
+
+summary: [多人場景，例如辦公室會議、街頭人群等]
+
+detailed_description:
+[Shot 1] <Subject 1> [動作], with several unnamed background figures visible but out of focus. (S1) says <d>[English] [台詞]</d>
+
+overall_soundscape: [多人環境音，例如人聲嘈雜、腳步聲]
+
+non_diegetic_music: N/A` },
+  ],
+};
+
+const TEMPLATE_STORAGE_KEY = "h3studio_custom_templates_v1";
+
+function loadCustomTemplates() {
+  try { return JSON.parse(localStorage.getItem(TEMPLATE_STORAGE_KEY) || "{}"); }
+  catch { return {}; }
+}
+function saveCustomTemplates(data) {
+  localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(data));
+}
+
+let currentTemplateCategory = "1";
+
+function templatesForCategory(cat) {
+  const custom = loadCustomTemplates()[cat] || [];
+  return [...BUILTIN_TEMPLATES[cat], ...custom];
+}
+
+function refreshTemplateSelect() {
+  const sel = document.getElementById('templateSelect');
+  const list = templatesForCategory(currentTemplateCategory);
+  sel.innerHTML = list.map((t, i) => `<option value="${i}">${t.name}</option>`).join('');
+  if (list.length) {
+    document.getElementById('templateEditor').value = list[0].content;
+  } else {
+    document.getElementById('templateEditor').value = '';
+  }
+}
+
+document.getElementById('templateCategoryToggle').addEventListener('click', (e) => {
+  const opt = e.target.closest('.toggle-opt');
+  if (!opt) return;
+  for (const c of e.currentTarget.children) c.classList.remove('on');
+  opt.classList.add('on');
+  currentTemplateCategory = opt.dataset.cat;
+  refreshTemplateSelect();
+});
+
+document.getElementById('templateSelect').addEventListener('change', (e) => {
+  const list = templatesForCategory(currentTemplateCategory);
+  const t = list[parseInt(e.target.value)];
+  if (t) document.getElementById('templateEditor').value = t.content;
+});
+
+document.getElementById('templateApplyBtn').addEventListener('click', () => {
+  document.getElementById('prompt').value = document.getElementById('templateEditor').value;
+  document.getElementById('prompt').dataset.originalLang = '';
+});
+
+document.getElementById('templateSaveBtn').addEventListener('click', () => {
+  const name = prompt('範本名稱：');
+  if (!name) return;
+  const all = loadCustomTemplates();
+  all[currentTemplateCategory] = all[currentTemplateCategory] || [];
+  all[currentTemplateCategory].push({ name, builtin: false, content: document.getElementById('templateEditor').value });
+  saveCustomTemplates(all);
+  refreshTemplateSelect();
+  document.getElementById('templateSelect').selectedIndex = templatesForCategory(currentTemplateCategory).length - 1;
+});
+
+document.getElementById('templateDeleteBtn').addEventListener('click', () => {
+  const list = templatesForCategory(currentTemplateCategory);
+  const idx = parseInt(document.getElementById('templateSelect').value);
+  const t = list[idx];
+  if (!t || t.builtin) { alert('內建範本不能刪除，只能刪除自己存的範本'); return; }
+  const all = loadCustomTemplates();
+  all[currentTemplateCategory] = (all[currentTemplateCategory] || []).filter(x => x.name !== t.name);
+  saveCustomTemplates(all);
+  refreshTemplateSelect();
+});
+
+refreshTemplateSelect();
+
+// ---------- Translate ----------
+async function translateText(text, target) {
+  const fd = new FormData();
+  fd.append('text', text);
+  fd.append('target', target);
+  const res = await fetch(`${API}/api/translate`, { method: 'POST', body: fd });
+  if (!res.ok) throw new Error('翻譯失敗');
+  const j = await res.json();
+  return j.translated;
+}
+
+const promptBox = document.getElementById('prompt');
+const translateStatus = document.getElementById('translateStatus');
+
+async function doTranslate(target) {
+  if (!promptBox.value.trim()) return;
+  if (!promptBox.dataset.original) promptBox.dataset.original = promptBox.value;
+  translateStatus.textContent = '翻譯中...';
+  try {
+    promptBox.value = await translateText(promptBox.value, target);
+    translateStatus.textContent = '已翻譯（可按「還原原文」復原）';
+  } catch (e) {
+    translateStatus.textContent = '翻譯失敗：' + e.message;
+  }
+}
+
+document.getElementById('translateToEnBtn').addEventListener('click', () => doTranslate('en'));
+document.getElementById('translateToZhBtn').addEventListener('click', () => doTranslate('zh-TW'));
+document.getElementById('resetLangBtn').addEventListener('click', () => {
+  if (promptBox.dataset.original) {
+    promptBox.value = promptBox.dataset.original;
+    delete promptBox.dataset.original;
+    translateStatus.textContent = '已還原原文';
+  } else {
+    translateStatus.textContent = '沒有可還原的原文';
+  }
+});
+
+// ---------- Voice profile recording & management ----------
+const RECORD_MAX_SECONDS = 20;
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordTimerHandle = null;
+let recordAutoStopHandle = null;
+let recordedBlob = null;
+let selectedVoiceProfile = null; // { id, name, comfy_filename }
+
+async function refreshMicList() {
+  try {
+    // Requesting a stream once first is required for device labels to be
+    // populated (browsers hide them until mic permission is granted).
+    const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+    tmp.getTracks().forEach(t => t.stop());
+  } catch (e) {
+    document.getElementById('recordStatus').textContent = '需要麥克風權限：' + e.message;
+    return;
+  }
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const mics = devices.filter(d => d.kind === 'audioinput');
+  const sel = document.getElementById('micSelect');
+  sel.innerHTML = mics.map((d, i) => `<option value="${d.deviceId}">${d.label || `麥克風 ${i + 1}`}</option>`).join('');
+}
+document.getElementById('micRefreshBtn').addEventListener('click', refreshMicList);
+refreshMicList();
+
+function formatSec(s) {
+  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const sec = Math.floor(s % 60).toString().padStart(2, '0');
+  return `${m}:${sec}`;
+}
+
+async function startRecording() {
+  const deviceId = document.getElementById('micSelect').value;
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+  });
+  recordedChunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    stream.getTracks().forEach(t => t.stop());
+    recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+    const url = URL.createObjectURL(recordedBlob);
+    document.getElementById('recordPreviewArea').innerHTML = `<audio controls src="${url}" style="width:100%"></audio>`;
+    document.getElementById('saveProfileRow').style.display = 'flex';
+    document.getElementById('recordStatus').textContent = '錄製完成，可預覽後存成 Profile';
+  };
+  mediaRecorder.start();
+
+  const startTime = Date.now();
+  document.getElementById('recordBtn').textContent = '■ 停止錄音';
+  document.getElementById('saveProfileRow').style.display = 'none';
+  document.getElementById('recordPreviewArea').innerHTML = '';
+  document.getElementById('recordStatus').textContent = '錄音中...';
+  recordTimerHandle = setInterval(() => {
+    const elapsed = (Date.now() - startTime) / 1000;
+    document.getElementById('recordTimer').textContent = `${formatSec(elapsed)} / ${formatSec(RECORD_MAX_SECONDS)}`;
+  }, 200);
+  recordAutoStopHandle = setTimeout(() => stopRecording(), RECORD_MAX_SECONDS * 1000);
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  clearInterval(recordTimerHandle);
+  clearTimeout(recordAutoStopHandle);
+  document.getElementById('recordBtn').textContent = '● 開始錄音';
+}
+
+document.getElementById('recordBtn').addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    stopRecording();
+  } else {
+    startRecording().catch(e => { document.getElementById('recordStatus').textContent = '錄音失敗：' + e.message; });
+  }
+});
+
+document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+  const name = document.getElementById('profileNameInput').value.trim();
+  if (!name) { alert('請輸入 Profile 名稱'); return; }
+  if (!recordedBlob) return;
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('file', recordedBlob, `${name}.webm`);
+  const res = await fetch(`${API}/api/voice-profiles`, { method: 'POST', body: fd });
+  if (!res.ok) { alert('存檔失敗'); return; }
+  document.getElementById('profileNameInput').value = '';
+  document.getElementById('saveProfileRow').style.display = 'none';
+  document.getElementById('recordPreviewArea').innerHTML = '';
+  document.getElementById('recordStatus').textContent = 'Profile 已儲存';
+  await refreshProfileList();
+});
+
+async function refreshProfileList() {
+  const res = await fetch(`${API}/api/voice-profiles`);
+  const { profiles } = await res.json();
+  const list = document.getElementById('profileList');
+  if (!profiles.length) {
+    list.innerHTML = '<div class="empty-state">尚無 Profile</div>';
+    return;
+  }
+  list.innerHTML = profiles.map(p => `
+    <div class="seg-row" style="grid-template-columns: 1fr auto auto auto">
+      <span>${p.name}</span>
+      <span class="seg-time">${p.duration ? p.duration.toFixed(1) + 's' : '—'}</span>
+      <button class="btn-download" data-use="${p.id}" type="button" style="padding:4px 10px">使用</button>
+      <button class="btn-download" data-del="${p.id}" type="button" style="padding:4px 10px">刪除</button>
+    </div>`).join('');
+
+  list.querySelectorAll('[data-use]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = profiles.find(x => x.id === btn.dataset.use);
+      selectedVoiceProfile = p;
+      document.getElementById('selectedProfileHint').textContent = `使用中：${p.name}`;
+    });
+  });
+  list.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('確定刪除這個 Profile？')) return;
+      await fetch(`${API}/api/voice-profiles/${btn.dataset.del}`, { method: 'DELETE' });
+      if (selectedVoiceProfile && selectedVoiceProfile.id === btn.dataset.del) {
+        selectedVoiceProfile = null;
+        document.getElementById('selectedProfileHint').textContent = '';
+      }
+      await refreshProfileList();
+    });
+  });
+}
+refreshProfileList();
+
+// ---------- Reference image thumbnail preview ----------
+function renderRefImagePreviews() {
+  const input = document.getElementById('refImages');
+  const files = Array.from(input.files).slice(0, 3);
+  const preview = document.getElementById('refImagesPreview');
+  preview.innerHTML = files.map((file, i) => {
+    const url = URL.createObjectURL(file);
+    return `<div class="ref-image-slot">
+      <img src="${url}" alt="人物${i + 1}" />
+      <span class="ref-image-tag">人物${i + 1}</span>
+      <button class="ref-image-remove" type="button" data-remove-idx="${i}" aria-label="移除">×</button>
+    </div>`;
+  }).join('');
+
+  preview.querySelectorAll('[data-remove-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.removeIdx);
+      const remaining = Array.from(input.files).filter((_, i) => i !== idx);
+      const dt = new DataTransfer();
+      remaining.forEach(f => dt.items.add(f));
+      input.files = dt.files;
+      renderRefImagePreviews();
+    });
+  });
+}
+document.getElementById('refImages').addEventListener('change', renderRefImagePreviews);
+
+function segmentCount() {
+  const min = parseFloat(document.getElementById('durationMinutes').value) || 1;
+  const seg = parseInt(document.getElementById('segmentLength').value) || 15;
+  return Math.max(1, Math.ceil((min * 60) / seg));
+}
+
+function updateHints() {
+  const n = segmentCount();
+  const min = parseFloat(document.getElementById('durationMinutes').value) || 1;
+  document.getElementById('segmentCountHint').textContent = `${min}分 ÷ ${document.getElementById('segmentLength').value}秒 = ${n} 段`;
+  document.getElementById('estLine').textContent = `預估約 ${Math.round(n * 10)} 分鐘（每段約 10 分鐘，turbo LoRA，未啟用 SageAttention）`;
+}
+document.getElementById('durationMinutes').addEventListener('input', updateHints);
+document.getElementById('segmentLength').addEventListener('input', updateHints);
+updateHints();
+
+for (const group of [document.getElementById('resToggle'), document.getElementById('fpsToggle')]) {
+  group.addEventListener('click', (e) => {
+    const opt = e.target.closest('.toggle-opt');
+    if (!opt) return;
+    for (const c of group.children) c.classList.remove('on');
+    opt.classList.add('on');
+  });
+}
+
+async function uploadFile(file, kind) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API}/api/upload/${kind}`, { method: 'POST', body: fd });
+  if (!res.ok) throw new Error(`上傳失敗: ${kind}`);
+  const j = await res.json();
+  return j.filename;
+}
+
+let pollTimer = null;
+
+document.getElementById('generateBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('generateBtn');
+  const errBox = document.getElementById('errorMsg');
+  errBox.innerHTML = '';
+  btn.disabled = true;
+  btn.textContent = '上傳中...';
+  try {
+    await checkComfyHealth();
+    if (!comfyUiAlive) throw new Error('ComfyUI 目前無法連線，請先確認 ComfyUI 是否正在執行後再試一次');
+
+    const promptText = document.getElementById('prompt').value.trim();
+    if (!promptText) throw new Error('請輸入 prompt');
+
+    const imageFiles = document.getElementById('refImages').files;
+    const refImageNames = [];
+    for (let i = 0; i < Math.min(imageFiles.length, 3); i++) {
+      refImageNames.push(await uploadFile(imageFiles[i], 'image'));
+    }
+    let refAudioName = '';
+    if (document.getElementById('refAudio').files.length) {
+      refAudioName = await uploadFile(document.getElementById('refAudio').files[0], 'audio');
+    } else if (selectedVoiceProfile) {
+      refAudioName = selectedVoiceProfile.comfy_filename;
+    }
+    let bgMusicName = '';
+    if (document.getElementById('bgMusic').files.length) {
+      bgMusicName = await uploadFile(document.getElementById('bgMusic').files[0], 'music');
+    }
+    let refVideoName = '';
+    if (document.getElementById('refVideo').files.length) {
+      refVideoName = await uploadFile(document.getElementById('refVideo').files[0], 'video');
+    }
+
+    const resOpt = document.querySelector('#resToggle .toggle-opt.on');
+    const fpsOpt = document.querySelector('#fpsToggle .toggle-opt.on');
+
+    btn.textContent = '送出生成中...';
+    const fd = new FormData();
+    fd.append('prompt', promptText);
+    fd.append('ref_image_filenames', JSON.stringify(refImageNames));
+    fd.append('ref_audio_filename', refAudioName);
+    fd.append('bg_music_filename', bgMusicName);
+    fd.append('ref_video_filename', refVideoName);
+    fd.append('use_ref_video_direct', document.getElementById('useRefVideoDirect').checked);
+    fd.append('duration_minutes', document.getElementById('durationMinutes').value);
+    fd.append('segment_length_seconds', document.getElementById('segmentLength').value);
+    fd.append('width', 864);
+    fd.append('height', 480);
+    fd.append('output_width', resOpt.dataset.w);
+    fd.append('output_height', resOpt.dataset.h);
+    fd.append('output_fps', fpsOpt.dataset.fps);
+
+    const res = await fetch(`${API}/api/generate`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '送出生成失敗');
+    const { job_id } = body;
+    btn.textContent = '生成中...';
+    pollJob(job_id, btn);
+  } catch (e) {
+    errBox.innerHTML = `<div class="msg error">${e.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = '開始生成';
+  }
+});
+
+function renderQueue(segments) {
+  const list = document.getElementById('queueList');
+  if (!segments.length) { list.innerHTML = '<div class="empty-state">尚未開始生成</div>'; return; }
+  document.getElementById('queueHint').textContent =
+    `${segments.filter(s => s.status === 'done').length} / ${segments.length} 完成`;
+  list.innerHTML = segments.map(s => {
+    const pillClass = s.status === 'done' ? 'done' : s.status === 'running' ? 'running' : s.status === 'error' ? 'error' : 'pending';
+    const pillText = s.status === 'done' ? '完成' : s.status === 'running' ? '生成中' : s.status === 'error' ? '失敗' : '等待中';
+    let timeText = '—';
+    let timeAttr = '';
+    if (s.elapsed != null) {
+      timeText = `${s.elapsed}s`;
+    } else if (s.status === 'running' && s.started_at != null) {
+      timeText = `${(Date.now() / 1000 - s.started_at).toFixed(1)}s`;
+      timeAttr = ` data-started-at="${s.started_at}"`;
+    }
+    return `<div class="seg-row">
+      <span class="seg-index mono">${String(s.index + 1).padStart(2, '0')}</span>
+      <div></div>
+      <span class="seg-time"${timeAttr}>${timeText}</span>
+      <span class="pill ${pillClass}">${pillText}</span>
+    </div>`;
+  }).join('');
+}
+
+// Ticks running-segment timers every second, independent of the 4s poll
+// interval, so the elapsed time visibly counts up while a segment runs.
+function tickRunningTimers() {
+  document.querySelectorAll('.seg-time[data-started-at]').forEach(el => {
+    const startedAt = parseFloat(el.dataset.startedAt);
+    el.textContent = `${(Date.now() / 1000 - startedAt).toFixed(1)}s`;
+  });
+}
+setInterval(tickRunningTimers, 1000);
+
+function pollJob(jobId, btn) {
+  pollTimer = setInterval(async () => {
+    const res = await fetch(`${API}/api/jobs/${jobId}`);
+    const j = await res.json();
+    renderQueue(j.segments);
+    if (j.status === 'done') {
+      clearInterval(pollTimer);
+      btn.disabled = false;
+      btn.textContent = '開始生成';
+      document.getElementById('videoArea').innerHTML = `
+        <video controls src="${API}/api/jobs/${jobId}/video"></video>
+        <div style="margin-top:10px"><a class="btn-download" href="${API}/api/jobs/${jobId}/video" download>下載完整影片</a></div>
+      `;
+    } else if (j.status === 'error') {
+      clearInterval(pollTimer);
+      btn.disabled = false;
+      btn.textContent = '開始生成';
+      document.getElementById('errorMsg').innerHTML = `<div class="msg error">生成失敗：${j.error || '未知錯誤'}</div>`;
+    }
+  }, 4000);
+}
+</script>
+</body>
+</html>
