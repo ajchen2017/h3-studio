@@ -36,15 +36,15 @@ SSH_ARGS = [
     f"{VPS_USER}@{VPS_HOST}",
 ]
 
-# This link (this PC <-> VPS) is known to be flaky: the SSH *control*
-# channel's keepalives can keep responding even after the *forwarded*
-# data channel has silently died, so ServerAlive alone never notices and
-# the tunnel sits up-but-useless indefinitely. There's no cheap way to
-# probe the forward's health from this side without another (slow, ~1min)
-# SSH round-trip, so instead we just force a full reconnect on a fixed
-# cadence - it bounds how long a silently-dead tunnel can stay undetected,
-# at the cost of a short gap every cycle while it re-handshakes.
-MAX_SESSION_SECONDS = 240
+# This link (this PC <-> VPS) is flaky specifically at connection *setup*
+# time - a fresh handshake has a real chance of landing half-dead (forward
+# bound but not relaying), but once a connection is actually up and
+# flowing it tends to stay solid for a long time (music.umaya.tw's tunnel
+# has run for hours unattended). So the fix isn't to reconnect often - a
+# frequent forced-reconnect just multiplies exposure to the risky
+# handshake window. Only use this as a distant safety net against a
+# forward dying silently and staying that way forever.
+MAX_SESSION_SECONDS = 1800
 
 if __name__ == "__main__":
     # Launched via pythonw.exe (no console window) under Task Scheduler, so
