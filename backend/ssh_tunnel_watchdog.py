@@ -10,6 +10,13 @@ import sys
 import time
 from pathlib import Path
 
+# pythonw.exe has no console of its own, so a plain subprocess.run(ssh_args)
+# leaves the child ssh.exe (a console app) with no inherited console handle -
+# Windows then allocates a brand-new, visible console window for it. Every
+# reconnect (frequent on this flaky line) popped up a fresh window. Passing
+# CREATE_NO_WINDOW plus explicit stdout/stderr file handles stops that.
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 LOG_PATH = Path(__file__).parent / "ssh_tunnel_boot.log"
 
 VPS_HOST = "118.150.141.193"
@@ -50,7 +57,9 @@ if __name__ == "__main__":
     while True:
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] connecting tunnel...", flush=True)
         try:
-            subprocess.run(SSH_ARGS, timeout=MAX_SESSION_SECONDS)
+            subprocess.run(SSH_ARGS, timeout=MAX_SESSION_SECONDS,
+                            stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+                            creationflags=NO_WINDOW)
         except subprocess.TimeoutExpired:
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] forcing reconnect after {MAX_SESSION_SECONDS}s "
                   f"(guards against a silently-dead forward that ServerAlive won't catch)", flush=True)
