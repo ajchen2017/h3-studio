@@ -41,8 +41,20 @@
   .stats-legend { display: inline-flex; flex-direction: column; gap: 1px; margin-left: 8px; font-size: 10px; line-height: 1.3; }
   .stats-legend span.gpu { color: #F2D94E; }
   .stats-legend span.cpu { color: var(--text); }
-  .grid { display: grid; grid-template-columns: 420px 1fr; gap: 20px; align-items: start; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .split-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .split-layout { grid-template-columns: 1fr; } }
+  .tab-bar { display: flex; gap: 2px; padding: 8px 8px 0; background: var(--panel-raised);
+    border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .tab-btn { background: transparent; border: none; color: var(--text-dim); padding: 8px 14px;
+    font-family: "Consolas", monospace; font-size: 11.5px; letter-spacing: 0.03em; cursor: pointer;
+    border-radius: 4px 4px 0 0; }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.on { background: var(--panel); color: var(--accent-strong); font-weight: 700; }
+  .tab-panel { padding: 18px 16px 20px; display: flex; flex-direction: column; gap: 18px;
+    max-height: 78vh; overflow-y: auto; }
+  .left-col .tab-panel { max-height: none; }
+  .generate-bar { padding: 14px 16px; border-top: 1px solid var(--line); background: var(--panel-raised);
+    display: flex; flex-direction: column; gap: 8px; }
   @media (max-width: 480px) {
     .app { padding: 14px 12px 40px; }
     .panel-body { padding: 14px 12px 16px; }
@@ -151,27 +163,37 @@
     </div>
   </div>
 
-  <div>
-    <div class="panel">
-      <div class="panel-head"><span class="panel-title">輸入</span></div>
-      <div class="panel-body">
+  <div class="split-layout">
+    <div class="panel left-col">
+      <div class="tab-bar" data-tab-group="left">
+        <button class="tab-btn on" type="button" data-tab="project">專案</button>
+        <button class="tab-btn" type="button" data-tab="settings">設定</button>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="project">
         <div class="field">
-          <div class="field-label"><span>Prompt 範本庫</span><span class="hint">1人 / 2人 / 3人 / 多人</span></div>
-          <div class="toggle-group" id="templateCategoryToggle">
-            <div class="toggle-opt on" data-cat="1">1人</div>
-            <div class="toggle-opt" data-cat="2">2人</div>
-            <div class="toggle-opt" data-cat="3">3人</div>
-            <div class="toggle-opt" data-cat="multi">多人</div>
-          </div>
-          <select id="templateSelect"></select>
-          <textarea id="templateEditor" placeholder="範本內容..." style="min-height:150px"></textarea>
+          <div class="field-label"><span>專案</span></div>
           <div class="row">
-            <button class="btn-download" id="templateApplyBtn" type="button">套用到 Prompt ↓</button>
-            <button class="btn-download" id="templateSaveBtn" type="button">另存新範本</button>
-            <button class="btn-download" id="templateDeleteBtn" type="button">刪除此範本</button>
+            <select id="projectSelect" style="flex:1"><option value="">（未載入專案）</option></select>
+            <button class="btn-download" id="projectLoadBtn" type="button">載入</button>
+          </div>
+          <div class="row">
+            <input type="text" id="projectNameInput" placeholder="專案名稱" style="flex:1" />
+            <button class="btn-download" id="projectNewBtn" type="button">新增</button>
+            <button class="btn-download" id="projectSaveBtn" type="button">儲存</button>
+          </div>
+          <div class="row">
+            <button class="btn-download" id="projectCloneBtn" type="button">複製</button>
+            <button class="btn-download" id="projectDeleteBtn" type="button">刪除</button>
           </div>
         </div>
+        <div class="field">
+          <div class="field-label"><span>生成紀錄</span></div>
+          <div class="queue" id="jobHistoryList"><div class="empty-state">尚無生成紀錄</div></div>
+        </div>
+      </div>
 
+      <div class="tab-panel" data-tab-panel="settings" style="display:none">
         <div class="field">
           <div class="field-label"><span>參考語音（單一聲音）</span></div>
           <input type="file" id="refAudio" accept="audio/*" />
@@ -201,6 +223,17 @@
         <div class="field">
           <div class="field-label"><span>已存語音 Profile</span><span class="hint" id="selectedProfileHint"></span></div>
           <div class="queue" id="profileList"><div class="empty-state">尚無 Profile</div></div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>參考圖片庫（人物照）</span></div>
+          <div class="row">
+            <input type="file" id="refLibFile" accept="image/*" style="flex:1" />
+            <input type="text" id="refLibNameInput" placeholder="人物名稱" style="flex:1" />
+            <button class="btn-download" id="refLibSaveBtn" type="button">存入圖庫</button>
+          </div>
+          <div class="hint-note">存過的人物照會出現在右邊「專案內容」分頁，用檔名直接調用，不用每次重新上傳</div>
+          <div class="ref-image-grid" id="refLibraryList" style="margin-top:6px"></div>
         </div>
 
         <div class="field">
@@ -241,75 +274,92 @@
             </div>
           </div>
         </div>
-
-        <button class="btn-generate" id="generateBtn">開始生成</button>
-        <div class="est-line" id="estLine"></div>
-        <div id="errorMsg"></div>
       </div>
     </div>
 
-  </div>
-
-  <div class="panel" style="margin-top:20px">
-    <div class="panel-head"><span class="panel-title">分段內容與進度</span><span class="hint mono" id="segmentCountHint"></span></div>
-    <div class="panel-body">
-      <div class="field">
-        <div class="field-label"><span>專案</span></div>
-        <div class="row">
-          <select id="projectSelect" style="flex:1"><option value="">（未載入專案）</option></select>
-          <button class="btn-download" id="projectLoadBtn" type="button">載入</button>
-        </div>
-        <div class="row">
-          <input type="text" id="projectNameInput" placeholder="專案名稱" style="flex:1" />
-          <button class="btn-download" id="projectNewBtn" type="button">新增</button>
-          <button class="btn-download" id="projectSaveBtn" type="button">儲存</button>
-          <button class="btn-download" id="projectCloneBtn" type="button">複製</button>
-          <button class="btn-download" id="projectDeleteBtn" type="button">刪除</button>
-        </div>
-        <div class="field-label" style="margin-top:8px"><span>生成紀錄</span></div>
-        <div class="queue" id="jobHistoryList"><div class="empty-state">尚無生成紀錄</div></div>
+    <div class="panel right-col">
+      <div class="tab-bar" data-tab-group="right">
+        <button class="tab-btn on" type="button" data-tab="content">專案內容</button>
+        <button class="tab-btn" type="button" data-tab="prompt">Prompt 輸入</button>
+        <button class="tab-btn" type="button" data-tab="generate">生成</button>
       </div>
 
-      <div class="field">
-        <div class="field-label"><span>參考圖片（可多人，最多 3 張）</span></div>
-        <input type="file" id="refImages" accept="image/*" multiple />
-        <div id="refImagesPreview" class="ref-image-grid" style="margin-top:6px"></div>
+      <div class="tab-panel" data-tab-panel="content">
+        <div class="field">
+          <div class="field-label"><span>參考圖片（可多人，最多 3 張）</span></div>
+          <input type="file" id="refImages" accept="image/*" multiple />
+          <div id="refImagesPreview" class="ref-image-grid" style="margin-top:6px"></div>
+          <div class="hint-note" style="margin-top:6px">從圖庫選用（在左邊「設定」分頁存過的人物照）</div>
+          <select id="refLibrarySelect"><option value="">（選擇圖庫人物）</option></select>
+          <div class="ref-image-grid" id="refLibrarySelectedPreview" style="margin-top:6px"></div>
+        </div>
+
+        <div class="field">
+          <div class="row">
+            <span class="field-label" style="margin:0">影片長度（分鐘）:</span>
+            <input type="number" id="durationMinutes" value="0.25" min="0.25" step="0.25" style="width:90px" />
+            <span class="hint mono" id="segmentCountHint" style="margin-left:auto"></span>
+          </div>
+          <div class="row">
+            <span class="field-label" style="margin:0">分段長度(秒/段):</span>
+            <input type="number" id="segmentLength" value="15" min="5" max="15" style="width:70px" />
+          </div>
+          <div class="row">
+            <button class="btn-download" id="quick15sBtn" type="button">15秒單段測試</button>
+            <span class="hint">一鍵設成 0.25 分鐘 × 15秒/段 = 1 段，跑最快的測試</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>共用設定（每段都會套用）</span>
+            <span class="hint" id="translateSharedEn" style="cursor:pointer;text-decoration:underline">中→英</span>
+            <span class="hint" id="translateSharedZh" style="cursor:pointer;text-decoration:underline">英→中</span>
+          </div>
+          <textarea id="subjectDefinitions" style="min-height:60px" placeholder="&lt;Subject 1&gt; = &lt;Picture 1&gt;, the character (identity fully_preserved)"></textarea>
+          <input type="text" id="summaryInput" placeholder="summary：整部影片一句話描述" style="margin-top:6px" />
+          <input type="text" id="musicInput" value="N/A" placeholder="non_diegetic_music" style="margin-top:6px" />
+        </div>
       </div>
 
-      <div class="field">
-        <div class="row">
-          <span class="field-label" style="margin:0">影片長度（分鐘）:</span>
-          <input type="number" id="durationMinutes" value="0.25" min="0.25" step="0.25" style="width:90px" />
+      <div class="tab-panel" data-tab-panel="prompt" style="display:none">
+        <div class="field">
+          <div class="field-label"><span>Prompt 範本庫</span><span class="hint">1人 / 2人 / 3人 / 多人</span></div>
+          <div class="toggle-group" id="templateCategoryToggle">
+            <div class="toggle-opt on" data-cat="1">1人</div>
+            <div class="toggle-opt" data-cat="2">2人</div>
+            <div class="toggle-opt" data-cat="3">3人</div>
+            <div class="toggle-opt" data-cat="multi">多人</div>
+          </div>
+          <select id="templateSelect"></select>
+          <textarea id="templateEditor" placeholder="範本內容..." style="min-height:120px"></textarea>
+          <div class="row">
+            <button class="btn-download" id="templateApplyBtn" type="button">套用到目前選取的段落 ↓</button>
+            <button class="btn-download" id="templateSaveBtn" type="button">另存新範本</button>
+            <button class="btn-download" id="templateDeleteBtn" type="button">刪除此範本</button>
+          </div>
         </div>
-        <div class="row">
-          <span class="field-label" style="margin:0">分段長度(秒/段):</span>
-          <input type="number" id="segmentLength" value="15" min="5" max="15" style="width:70px" />
-        </div>
-        <div class="row">
-          <button class="btn-download" id="quick15sBtn" type="button">15秒單段測試</button>
-          <span class="hint">一鍵設成 0.25 分鐘 × 15秒/段 = 1 段，跑最快的測試</span>
+
+        <div id="segmentBlockSlotPrompt"></div>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="generate" style="display:none">
+        <div id="segmentBlockSlotGenerate"></div>
+        <div class="field">
+          <div class="field-label"><span>播放區</span><span class="hint" id="playbackLabel">尚未有影片</span></div>
+          <div id="playbackArea"><div class="empty-state">生成完成後會顯示在這裡</div></div>
         </div>
       </div>
 
-      <div class="field">
-        <div class="field-label"><span>共用設定（每段都會套用）</span>
-          <span class="hint" id="translateSharedEn" style="cursor:pointer;text-decoration:underline">中→英</span>
-          <span class="hint" id="translateSharedZh" style="cursor:pointer;text-decoration:underline">英→中</span>
-        </div>
-        <textarea id="subjectDefinitions" style="min-height:60px" placeholder="&lt;Subject 1&gt; = &lt;Picture 1&gt;, the character (identity fully_preserved)"></textarea>
-        <input type="text" id="summaryInput" placeholder="summary：整部影片一句話描述" style="margin-top:6px" />
-        <input type="text" id="musicInput" value="N/A" placeholder="non_diegetic_music" style="margin-top:6px" />
-      </div>
-
-      <div class="field">
+      <div class="field" id="segmentBlock" style="display:none">
         <div class="field-label"><span>分段內容</span><span class="hint" id="segPreviewToggleHint" style="cursor:pointer;text-decoration:underline">預覽組合後的完整 Prompt</span></div>
         <div id="segmentCards"></div>
         <pre id="segPreviewBox" class="mono" style="display:none;white-space:pre-wrap;background:var(--panel-raised);border:1px solid var(--line);border-radius:5px;padding:12px;font-size:11.5px;max-height:320px;overflow:auto"></pre>
       </div>
 
-      <div class="field">
-        <div class="field-label"><span>播放區</span><span class="hint" id="playbackLabel">尚未有影片</span></div>
-        <div id="playbackArea"><div class="empty-state">生成完成後會顯示在這裡</div></div>
+      <div class="generate-bar">
+        <button class="btn-generate" id="generateBtn">開始生成</button>
+        <div class="est-line" id="estLine"></div>
+        <div id="errorMsg"></div>
       </div>
     </div>
   </div>
@@ -401,6 +451,40 @@ async function updateSystemStats() {
 }
 updateSystemStats();
 setInterval(updateSystemStats, 2000);
+
+// ---------- Tab switching (left: 專案/設定, right: 專案內容/Prompt輸入/生成) ----------
+// The segment table (#segmentBlock) is one shared element used by both
+// "Prompt 輸入" (editable) and "生成" (same cards, but renderSegmentCards
+// already locks them read-only + shows status/play once a job is
+// running) - it physically moves between each tab's slot rather than
+// being duplicated, so there's only ever one source of truth.
+function switchTab(group, name) {
+  document.querySelectorAll(`.tab-bar[data-tab-group="${group}"] .tab-btn`).forEach(btn =>
+    btn.classList.toggle('on', btn.dataset.tab === name));
+  const container = group === 'left' ? document.querySelector('.left-col') : document.querySelector('.right-col');
+  container.querySelectorAll('.tab-panel').forEach(panel =>
+    panel.style.display = panel.dataset.tabPanel === name ? 'flex' : 'none');
+
+  if (group === 'right') {
+    const block = document.getElementById('segmentBlock');
+    const slot = name === 'prompt' ? document.getElementById('segmentBlockSlotPrompt')
+      : name === 'generate' ? document.getElementById('segmentBlockSlotGenerate') : null;
+    if (slot) {
+      slot.appendChild(block);
+      block.style.display = 'flex';
+    } else {
+      block.style.display = 'none';
+    }
+  }
+}
+document.querySelectorAll('.tab-bar').forEach(bar => {
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    switchTab(bar.dataset.tabGroup, btn.dataset.tab);
+  });
+});
+switchTab('right', 'content'); // content tab is "on" by default in HTML, but the block still needs its first placement
 
 // ---------- Quick 15s single-segment test preset ----------
 document.getElementById('quick15sBtn').addEventListener('click', () => {
@@ -761,6 +845,80 @@ async function refreshProfileList() {
 }
 refreshProfileList();
 
+// ---------- Reference image library (persistent, named person photos) ----------
+let refLibraryEntries = [];
+let selectedRefLibraryImages = []; // up to 3 entries picked from the library
+
+async function refreshRefLibrary() {
+  const res = await fetch(`${API}/api/ref-image-library`);
+  const { images } = await res.json();
+  refLibraryEntries = images;
+
+  const list = document.getElementById('refLibraryList');
+  list.innerHTML = images.length ? images.map(img => `
+    <div class="ref-image-slot" data-lib-id="${img.id}">
+      <img src="${API}/api/uploads/image/${encodeURIComponent(img.filename)}" alt="${escapeAttr(img.name)}" />
+      <span class="ref-image-tag">${escapeHtml(img.name)}</span>
+      <button class="ref-image-remove" type="button" data-lib-delete="${img.id}" aria-label="刪除">×</button>
+    </div>`).join('') : '<div class="empty-state">尚無存檔的人物照</div>';
+  list.querySelectorAll('[data-lib-delete]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('確定刪除這張圖庫照片？')) return;
+      await fetch(`${API}/api/ref-image-library/${btn.dataset.libDelete}`, { method: 'DELETE' });
+      selectedRefLibraryImages = selectedRefLibraryImages.filter(x => x.id !== btn.dataset.libDelete);
+      await refreshRefLibrary();
+      renderSelectedRefLibrary();
+    });
+  });
+
+  const sel = document.getElementById('refLibrarySelect');
+  sel.innerHTML = '<option value="">（選擇圖庫人物）</option>' +
+    images.map(img => `<option value="${img.id}">${escapeHtml(img.name)}</option>`).join('');
+}
+refreshRefLibrary();
+
+document.getElementById('refLibSaveBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('refLibFile');
+  const name = document.getElementById('refLibNameInput').value.trim();
+  if (!fileInput.files.length) { alert('請先選擇一張圖片'); return; }
+  if (!name) { alert('請輸入人物名稱'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('file', fileInput.files[0]);
+  const res = await fetch(`${API}/api/ref-image-library`, { method: 'POST', body: fd });
+  if (!res.ok) { alert('存檔失敗'); return; }
+  fileInput.value = '';
+  document.getElementById('refLibNameInput').value = '';
+  await refreshRefLibrary();
+});
+
+function renderSelectedRefLibrary() {
+  const preview = document.getElementById('refLibrarySelectedPreview');
+  preview.innerHTML = selectedRefLibraryImages.map((img, i) => `
+    <div class="ref-image-slot">
+      <img src="${API}/api/uploads/image/${encodeURIComponent(img.filename)}" alt="${escapeAttr(img.name)}" />
+      <span class="ref-image-tag">${escapeHtml(img.name)}</span>
+      <button class="ref-image-remove" type="button" data-unselect-lib="${i}" aria-label="移除">×</button>
+    </div>`).join('');
+  preview.querySelectorAll('[data-unselect-lib]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedRefLibraryImages.splice(parseInt(btn.dataset.unselectLib), 1);
+      renderSelectedRefLibrary();
+    });
+  });
+}
+
+document.getElementById('refLibrarySelect').addEventListener('change', (e) => {
+  const id = e.target.value;
+  if (!id) return;
+  e.target.value = '';
+  if (selectedRefLibraryImages.length >= 3) { alert('最多選 3 張參考圖片（含上傳檔案）'); return; }
+  if (selectedRefLibraryImages.some(x => x.id === id)) return;
+  const entry = refLibraryEntries.find(x => x.id === id);
+  if (entry) { selectedRefLibraryImages.push(entry); renderSelectedRefLibrary(); }
+});
+
 // ---------- Reference image thumbnail preview ----------
 function defaultSubjectDefinitions(n) {
   return Array.from({ length: n }, (_, i) =>
@@ -998,9 +1156,12 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     }
     const segPrompts = segmentRows.map(buildFullPrompt);
 
+    // Library picks first (already sitting in ComfyUI's input/ dir under
+    // a stable filename - no re-upload needed), then fill any remaining
+    // slots with freshly uploaded files, capped at 3 total.
+    const refImageNames = selectedRefLibraryImages.map(x => x.filename);
     const imageFiles = document.getElementById('refImages').files;
-    const refImageNames = [];
-    for (let i = 0; i < Math.min(imageFiles.length, 3); i++) {
+    for (let i = 0; i < imageFiles.length && refImageNames.length < 3; i++) {
       refImageNames.push(await uploadFile(imageFiles[i], 'image'));
     }
     let refAudioName = '';
@@ -1046,6 +1207,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     currentJobId = job_id;
     formLocked = true;
     renderSegmentCards();
+    switchTab('right', 'generate');
     btn.textContent = '生成中...';
     pollJob(job_id, btn);
     refreshJobHistory();
@@ -1150,6 +1312,7 @@ async function resumeActiveJob() {
     formLocked = true;
     loadJobPromptsIntoForm(j);
     renderSegmentCards(j.segments);
+    switchTab('right', 'generate');
 
     if (j.status === 'done') {
       localStorage.removeItem(ACTIVE_JOB_KEY);
@@ -1193,6 +1356,7 @@ async function refreshJobHistory() {
         formLocked = true;
         loadJobPromptsIntoForm(j);
         renderSegmentCards(j.segments);
+        switchTab('right', 'generate');
         showCombinedVideo(jobId);
       });
     });
@@ -1264,6 +1428,8 @@ document.getElementById('projectNewBtn').addEventListener('click', () => {
   document.getElementById('playbackLabel').textContent = '尚未有影片';
   document.getElementById('refImagesPreview').innerHTML = '';
   document.getElementById('refImages').value = '';
+  selectedRefLibraryImages = [];
+  renderSelectedRefLibrary();
   updateHints();
 });
 

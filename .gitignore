@@ -3,6 +3,8 @@ backend/__pycache__/
 backend/jobs/
 backend/uploads/
 backend/voice_profiles/
+backend/ref_images/
+backend/projects/
 *.pyc
 *.log
 _test_api.json

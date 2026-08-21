@@ -26,6 +26,8 @@ UPLOADS_DIR = Path(__file__).parent / "uploads"
 VOICE_PROFILES_DIR = Path(__file__).parent / "voice_profiles"
 VOICE_PROFILES_INDEX = VOICE_PROFILES_DIR / "index.json"
 PROJECTS_DIR = Path(__file__).parent / "projects"
+REF_IMAGES_DIR = Path(__file__).parent / "ref_images"
+REF_IMAGES_INDEX = REF_IMAGES_DIR / "index.json"
 FFMPEG = "ffmpeg"
 FFPROBE = "ffprobe"
 
@@ -33,6 +35,7 @@ JOBS_DIR.mkdir(exist_ok=True)
 UPLOADS_DIR.mkdir(exist_ok=True)
 VOICE_PROFILES_DIR.mkdir(exist_ok=True)
 PROJECTS_DIR.mkdir(exist_ok=True)
+REF_IMAGES_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="H3 Studio API")
 app.add_middleware(
@@ -161,6 +164,55 @@ async def get_voice_profile_audio(profile_id: str):
     if not match:
         return JSONResponse({"error": "not found"}, status_code=404)
     return FileResponse(VOICE_PROFILES_DIR / match["filename"])
+
+
+def _load_ref_image_library() -> list[dict]:
+    if not REF_IMAGES_INDEX.exists():
+        return []
+    with open(REF_IMAGES_INDEX, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_ref_image_library(entries: list[dict]):
+    with open(REF_IMAGES_INDEX, "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False)
+
+
+@app.get("/api/ref-image-library")
+async def list_ref_image_library():
+    return {"images": _load_ref_image_library()}
+
+
+@app.post("/api/ref-image-library")
+async def add_ref_image_library(name: str = Form(...), file: UploadFile = File(...)):
+    ext = Path(file.filename).suffix or ".png"
+    image_id = uuid.uuid4().hex[:12]
+    # Saved directly into ComfyUI's input/ dir under a stable name, same
+    # as voice profiles - the workflow reads reference images from there,
+    # and /api/uploads/image/{filename} already serves it back for
+    # thumbnail preview without needing a separate endpoint.
+    comfy_filename = f"reflib_{image_id}{ext}"
+    dest = COMFYUI_INPUT_DIR / comfy_filename
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    entry = {"id": image_id, "name": name, "filename": comfy_filename, "created_at": time.time()}
+    entries = _load_ref_image_library()
+    entries.append(entry)
+    _save_ref_image_library(entries)
+    return entry
+
+
+@app.delete("/api/ref-image-library/{image_id}")
+async def delete_ref_image_library(image_id: str):
+    entries = _load_ref_image_library()
+    match = next((e for e in entries if e["id"] == image_id), None)
+    if not match:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    (COMFYUI_INPUT_DIR / match["filename"]).unlink(missing_ok=True)
+    entries = [e for e in entries if e["id"] != image_id]
+    _save_ref_image_library(entries)
+    return {"ok": True}
 
 
 def _translate_text(text: str, target: str, source: str = "auto") -> str:
