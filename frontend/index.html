@@ -105,8 +105,18 @@
     border-radius: 5px; overflow: hidden; }
   .seg-row { display: grid; grid-template-columns: 28px 1fr auto auto; align-items: center; gap: 12px;
     background: var(--panel); padding: 11px 13px; }
-  .seg-index { font-family: "Consolas", monospace; font-size: 11px; color: var(--text-faint); }
   .seg-time { font-family: "Consolas", monospace; font-size: 11.5px; color: var(--text-faint); }
+  .seg-card { background: var(--panel-raised); border: 1px solid var(--line); border-radius: 6px;
+    padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+  .seg-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .seg-card-index { font-family: "Consolas", monospace; font-size: 12.5px; font-weight: 700; color: var(--accent-strong); }
+  .seg-card-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; align-items: start; }
+  .seg-card-fields textarea { min-height: 90px; font-size: 12.5px; }
+  .seg-card-fields input[type=text] { font-size: 12.5px; }
+  .seg-card video { width: 100%; border-radius: 5px; border: 1px solid var(--line); background: #000; margin-top: 4px; }
+  @media (max-width: 640px) {
+    .seg-card-fields { grid-template-columns: 1fr; }
+  }
   .pill { display: inline-flex; align-items: center; gap: 5px; font-family: "Consolas", monospace; font-size: 10.5px;
     padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
   .pill.done { background: var(--success-soft); color: var(--success); }
@@ -141,7 +151,7 @@
     </div>
   </div>
 
-  <div class="grid">
+  <div>
     <div class="panel">
       <div class="panel-head"><span class="panel-title">輸入</span></div>
       <div class="panel-body">
@@ -160,23 +170,6 @@
             <button class="btn-download" id="templateSaveBtn" type="button">另存新範本</button>
             <button class="btn-download" id="templateDeleteBtn" type="button">刪除此範本</button>
           </div>
-        </div>
-
-        <div class="field">
-          <div class="field-label"><span>Prompt（正式送出用）</span></div>
-          <textarea id="prompt" placeholder="描述場景、動作、對白/歌聲..."></textarea>
-          <div class="row">
-            <button class="btn-download" id="translateToEnBtn" type="button">中 → 英</button>
-            <button class="btn-download" id="translateToZhBtn" type="button">英 → 中</button>
-            <button class="btn-download" id="resetLangBtn" type="button">還原原文</button>
-            <span class="hint" id="translateStatus"></span>
-          </div>
-        </div>
-
-        <div class="field">
-          <div class="field-label"><span>參考圖片（可多人，最多 3 張）</span></div>
-          <input type="file" id="refImages" accept="image/*" multiple />
-          <div id="refImagesPreview" class="ref-image-grid" style="margin-top:6px"></div>
         </div>
 
         <div class="field">
@@ -232,22 +225,6 @@
         </div>
 
         <div class="field">
-          <div class="row">
-            <span class="field-label" style="margin:0">影片長度（分鐘）:</span>
-            <input type="number" id="durationMinutes" value="0.25" min="0.25" step="0.25" style="width:90px" />
-            <span class="hint mono" id="segmentCountHint" style="margin-left:auto"></span>
-          </div>
-          <div class="row">
-            <span class="field-label" style="margin:0">分段長度(秒/段):</span>
-            <input type="number" id="segmentLength" value="15" min="5" max="15" style="width:70px" />
-          </div>
-          <div class="row">
-            <button class="btn-download" id="quick15sBtn" type="button">15秒單段測試</button>
-            <span class="hint">一鍵設成 0.25 分鐘 × 15秒/段 = 1 段，跑最快的測試</span>
-          </div>
-        </div>
-
-        <div class="field">
           <div class="field-label"><span>輸出格式</span></div>
           <div class="row">
             <span class="hint">解析度</span>
@@ -271,17 +248,68 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head"><span class="panel-title">輸出</span></div>
-      <div class="panel-body">
-        <div class="field">
-          <div class="field-label"><span>分段佇列</span><span class="hint" id="queueHint"></span></div>
-          <div class="queue" id="queueList"><div class="empty-state">尚未開始生成</div></div>
+  </div>
+
+  <div class="panel" style="margin-top:20px">
+    <div class="panel-head"><span class="panel-title">分段內容與進度</span><span class="hint mono" id="segmentCountHint"></span></div>
+    <div class="panel-body">
+      <div class="field">
+        <div class="field-label"><span>專案</span></div>
+        <div class="row">
+          <select id="projectSelect" style="flex:1"><option value="">（未載入專案）</option></select>
+          <button class="btn-download" id="projectLoadBtn" type="button">載入</button>
         </div>
-        <div class="field">
-          <div class="field-label"><span>結果</span></div>
-          <div id="videoArea"><div class="empty-state">生成完成後會顯示在這裡</div></div>
+        <div class="row">
+          <input type="text" id="projectNameInput" placeholder="專案名稱" style="flex:1" />
+          <button class="btn-download" id="projectNewBtn" type="button">新增</button>
+          <button class="btn-download" id="projectSaveBtn" type="button">儲存</button>
+          <button class="btn-download" id="projectCloneBtn" type="button">複製</button>
+          <button class="btn-download" id="projectDeleteBtn" type="button">刪除</button>
         </div>
+        <div class="field-label" style="margin-top:8px"><span>生成紀錄</span></div>
+        <div class="queue" id="jobHistoryList"><div class="empty-state">尚無生成紀錄</div></div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span>參考圖片（可多人，最多 3 張）</span></div>
+        <input type="file" id="refImages" accept="image/*" multiple />
+        <div id="refImagesPreview" class="ref-image-grid" style="margin-top:6px"></div>
+      </div>
+
+      <div class="field">
+        <div class="row">
+          <span class="field-label" style="margin:0">影片長度（分鐘）:</span>
+          <input type="number" id="durationMinutes" value="0.25" min="0.25" step="0.25" style="width:90px" />
+        </div>
+        <div class="row">
+          <span class="field-label" style="margin:0">分段長度(秒/段):</span>
+          <input type="number" id="segmentLength" value="15" min="5" max="15" style="width:70px" />
+        </div>
+        <div class="row">
+          <button class="btn-download" id="quick15sBtn" type="button">15秒單段測試</button>
+          <span class="hint">一鍵設成 0.25 分鐘 × 15秒/段 = 1 段，跑最快的測試</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span>共用設定（每段都會套用）</span>
+          <span class="hint" id="translateSharedEn" style="cursor:pointer;text-decoration:underline">中→英</span>
+          <span class="hint" id="translateSharedZh" style="cursor:pointer;text-decoration:underline">英→中</span>
+        </div>
+        <textarea id="subjectDefinitions" style="min-height:60px" placeholder="&lt;Subject 1&gt; = &lt;Picture 1&gt;, the character (identity fully_preserved)"></textarea>
+        <input type="text" id="summaryInput" placeholder="summary：整部影片一句話描述" style="margin-top:6px" />
+        <input type="text" id="musicInput" value="N/A" placeholder="non_diegetic_music" style="margin-top:6px" />
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span>分段內容</span><span class="hint" id="segPreviewToggleHint" style="cursor:pointer;text-decoration:underline">預覽組合後的完整 Prompt</span></div>
+        <div id="segmentCards"></div>
+        <pre id="segPreviewBox" class="mono" style="display:none;white-space:pre-wrap;background:var(--panel-raised);border:1px solid var(--line);border-radius:5px;padding:12px;font-size:11.5px;max-height:320px;overflow:auto"></pre>
+      </div>
+
+      <div class="field">
+        <div class="field-label"><span>播放區</span><span class="hint" id="playbackLabel">尚未有影片</span></div>
+        <div id="playbackArea"><div class="empty-state">生成完成後會顯示在這裡</div></div>
       </div>
     </div>
   </div>
@@ -509,9 +537,38 @@ document.getElementById('templateSelect').addEventListener('change', (e) => {
   if (t) document.getElementById('templateEditor').value = t.content;
 });
 
+function parseTemplateIntoParts(content) {
+  const section = (label, nextLabels) => {
+    const re = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\n\\s*\\n(?:${nextLabels.join('|')}):|$)`, 'i');
+    const m = content.match(re);
+    return m ? m[1].trim() : '';
+  };
+  const subject = section('subject_definitions', ['summary']);
+  const summary = section('summary', ['detailed_description']);
+  const detailed = section('detailed_description', ['overall_soundscape']);
+  const soundscape = section('overall_soundscape', ['non_diegetic_music']);
+  const music = section('non_diegetic_music', []);
+  let camera = '';
+  const shotLines = [];
+  detailed.split('\n').forEach(line => {
+    const t = line.trim();
+    if (!t) return;
+    if (/^camera\b/i.test(t)) {
+      const stripped = t.replace(/^camera\s*/i, '');
+      camera = camera ? `${camera} ${stripped}` : stripped;
+    } else shotLines.push(t);
+  });
+  return { subject, summary, shot: shotLines.join('\n'), camera, soundscape, music };
+}
+
 document.getElementById('templateApplyBtn').addEventListener('click', () => {
-  document.getElementById('prompt').value = document.getElementById('templateEditor').value;
-  document.getElementById('prompt').dataset.originalLang = '';
+  const parts = parseTemplateIntoParts(document.getElementById('templateEditor').value);
+  document.getElementById('subjectDefinitions').value = parts.subject;
+  document.getElementById('summaryInput').value = parts.summary;
+  document.getElementById('musicInput').value = parts.music || 'N/A';
+  ensureSegmentRowsCount(segmentRows.length || 1);
+  segmentRows[activeSegmentIndex] = { shot: parts.shot, camera: parts.camera, soundscape: parts.soundscape };
+  renderSegmentCards();
 });
 
 document.getElementById('templateSaveBtn').addEventListener('click', () => {
@@ -549,32 +606,29 @@ async function translateText(text, target) {
   return j.translated;
 }
 
-const promptBox = document.getElementById('prompt');
-const translateStatus = document.getElementById('translateStatus');
-
-async function doTranslate(target) {
-  if (!promptBox.value.trim()) return;
-  if (!promptBox.dataset.original) promptBox.dataset.original = promptBox.value;
-  translateStatus.textContent = '翻譯中...';
+// Per-row, per-field translate/undo. Originals are kept on
+// segmentRows[i]._original[key] so "還原全部" can restore shot/camera/
+// soundscape independently of whichever ones were actually translated.
+async function translateField(idx, key, target) {
+  const row = segmentRows[idx];
+  if (!row || !row[key] || !row[key].trim()) return;
+  row._original = row._original || {};
+  if (row._original[key] == null) row._original[key] = row[key];
   try {
-    promptBox.value = await translateText(promptBox.value, target);
-    translateStatus.textContent = '已翻譯（可按「還原原文」復原）';
+    row[key] = await translateText(row[key], target);
+    renderSegmentCards();
   } catch (e) {
-    translateStatus.textContent = '翻譯失敗：' + e.message;
+    alert('翻譯失敗：' + e.message);
   }
 }
-
-document.getElementById('translateToEnBtn').addEventListener('click', () => doTranslate('en'));
-document.getElementById('translateToZhBtn').addEventListener('click', () => doTranslate('zh-TW'));
-document.getElementById('resetLangBtn').addEventListener('click', () => {
-  if (promptBox.dataset.original) {
-    promptBox.value = promptBox.dataset.original;
-    delete promptBox.dataset.original;
-    translateStatus.textContent = '已還原原文';
-  } else {
-    translateStatus.textContent = '沒有可還原的原文';
+function resetRowLang(idx) {
+  const row = segmentRows[idx];
+  if (row && row._original) {
+    Object.keys(row._original).forEach(key => { row[key] = row._original[key]; });
+    delete row._original;
+    renderSegmentCards();
   }
-});
+}
 
 // ---------- Voice profile recording & management ----------
 const RECORD_MAX_SECONDS = 20;
@@ -708,6 +762,11 @@ async function refreshProfileList() {
 refreshProfileList();
 
 // ---------- Reference image thumbnail preview ----------
+function defaultSubjectDefinitions(n) {
+  return Array.from({ length: n }, (_, i) =>
+    `<Subject ${i + 1}> = <Picture ${i + 1}>, the character (identity fully_preserved)`).join('\n');
+}
+
 function renderRefImagePreviews() {
   const input = document.getElementById('refImages');
   const files = Array.from(input.files).slice(0, 3);
@@ -731,8 +790,156 @@ function renderRefImagePreviews() {
       renderRefImagePreviews();
     });
   });
+
+  // Keep subject_definitions in sync with how many reference images are
+  // loaded, but only while the user hasn't hand-edited it away from the
+  // auto-generated shape (tracked via a data flag on the textarea).
+  const subjEl = document.getElementById('subjectDefinitions');
+  if (files.length && subjEl.dataset.auto !== 'false') {
+    subjEl.value = defaultSubjectDefinitions(files.length);
+    subjEl.dataset.auto = 'true';
+  }
 }
 document.getElementById('refImages').addEventListener('change', renderRefImagePreviews);
+document.getElementById('subjectDefinitions').addEventListener('input', (e) => {
+  e.target.dataset.auto = 'false';
+});
+
+// ---------- Segment table: shared state + rendering ----------
+let segmentRows = []; // [{ shot, camera, soundscape, _original? }]
+let activeSegmentIndex = 0;
+let currentJobId = null;
+let formLocked = false; // true once a job is submitted - segment fields go read-only
+
+function escapeHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g, '&quot;');
+}
+
+function ensureSegmentRowsCount(n) {
+  while (segmentRows.length < n) segmentRows.push({ shot: '', camera: '', soundscape: '' });
+  segmentRows.length = n;
+}
+
+function buildFullPrompt(row) {
+  const subject = document.getElementById('subjectDefinitions').value.trim();
+  const summary = document.getElementById('summaryInput').value.trim();
+  const music = document.getElementById('musicInput').value.trim() || 'N/A';
+  const detail = [row.shot.trim(), row.camera.trim() ? `Camera ${row.camera.trim().replace(/^camera\s*/i, '')}` : '']
+    .filter(Boolean).join('\n');
+  return `subject_definitions:\n${subject}\n\nsummary: ${summary}\n\ndetailed_description:\n${detail}\n\noverall_soundscape: ${row.soundscape.trim()}\n\nnon_diegetic_music: ${music}`;
+}
+
+// liveSegments: optional array from a job status response ({status,
+// elapsed, started_at, output_file}) overlaid onto the input rows to
+// show progress + per-segment playback once generation has started.
+function renderSegmentCards(liveSegments) {
+  const container = document.getElementById('segmentCards');
+  container.innerHTML = segmentRows.map((row, i) => {
+    const live = liveSegments && liveSegments[i];
+    const pillClass = !live ? 'pending' : live.status;
+    const pillText = !live ? '尚未送出'
+      : live.status === 'done' ? '完成' : live.status === 'running' ? '生成中'
+      : live.status === 'error' ? '失敗' : '等待中';
+    let timeText = '';
+    let timeAttr = '';
+    if (live) {
+      if (live.elapsed != null) timeText = `${live.elapsed}s`;
+      else if (live.status === 'running' && live.started_at != null) {
+        timeText = `${(Date.now() / 1000 - live.started_at).toFixed(1)}s`;
+        timeAttr = ` data-started-at="${live.started_at}"`;
+      }
+    }
+    const playBtn = (live && live.status === 'done' && currentJobId)
+      ? `<button class="btn-download" data-play-seg="${i}" type="button" style="align-self:flex-start">▶ 播放這段</button>` : '';
+    const disabled = formLocked ? 'disabled' : '';
+    const fieldLabel = (name, key) => !formLocked
+      ? `<span class="hint" data-tr-en="${key}:${i}" style="cursor:pointer;text-decoration:underline;font-size:10px">${name} 中→英</span>
+         <span class="hint" data-tr-zh="${key}:${i}" style="cursor:pointer;text-decoration:underline;font-size:10px">英→中</span>`
+      : `<span class="hint" style="font-size:10px">${name}</span>`;
+    return `<div class="seg-card" data-seg-idx="${i}">
+      <div class="seg-card-head">
+        <span class="seg-card-index">Seg ${i + 1}</span>
+        <span class="pill ${pillClass}">${pillText}</span>
+        <span class="seg-time"${timeAttr}>${timeText}</span>
+        ${!formLocked ? `<span class="hint" data-translate-undo="${i}" style="cursor:pointer;text-decoration:underline;margin-left:auto">還原全部</span>` : ''}
+      </div>
+      <div class="seg-card-fields">
+        <div>
+          ${fieldLabel('Shot 內容/台詞', 'shot')}
+          <textarea class="seg-shot" ${disabled} placeholder="[Shot 1] &lt;Subject 1&gt; ...動作... (S1) says &lt;d&gt;[English] 台詞&lt;/d&gt;">${escapeHtml(row.shot)}</textarea>
+        </div>
+        <div>
+          ${fieldLabel('Camera', 'camera')}
+          <input type="text" class="seg-camera" ${disabled} placeholder="運鏡描述" value="${escapeAttr(row.camera)}" />
+        </div>
+        <div>
+          ${fieldLabel('環境音', 'soundscape')}
+          <input type="text" class="seg-soundscape" ${disabled} placeholder="這段的環境音" value="${escapeAttr(row.soundscape)}" />
+        </div>
+      </div>
+      ${playBtn}
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.seg-card').forEach(card => {
+    const idx = parseInt(card.dataset.segIdx);
+    const shotEl = card.querySelector('.seg-shot');
+    const camEl = card.querySelector('.seg-camera');
+    const sndEl = card.querySelector('.seg-soundscape');
+    shotEl.addEventListener('input', () => segmentRows[idx].shot = shotEl.value);
+    camEl.addEventListener('input', () => segmentRows[idx].camera = camEl.value);
+    sndEl.addEventListener('input', () => segmentRows[idx].soundscape = sndEl.value);
+    [shotEl, camEl, sndEl].forEach(el => el.addEventListener('focus', () => activeSegmentIndex = idx));
+  });
+  const fieldEl = (idx, key) => container.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-${key}`);
+  container.querySelectorAll('[data-tr-en]').forEach(el => el.addEventListener('click', () => {
+    const [key, idx] = el.dataset.trEn.split(':');
+    translateField(parseInt(idx), key, 'en');
+  }));
+  container.querySelectorAll('[data-tr-zh]').forEach(el => el.addEventListener('click', () => {
+    const [key, idx] = el.dataset.trZh.split(':');
+    translateField(parseInt(idx), key, 'zh-TW');
+  }));
+  container.querySelectorAll('[data-translate-undo]').forEach(el =>
+    el.addEventListener('click', () => resetRowLang(parseInt(el.dataset.translateUndo))));
+  container.querySelectorAll('[data-play-seg]').forEach(el =>
+    el.addEventListener('click', () => showSegmentVideo(currentJobId, parseInt(el.dataset.playSeg))));
+}
+
+document.getElementById('segPreviewToggleHint').addEventListener('click', () => {
+  const box = document.getElementById('segPreviewBox');
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+  box.textContent = segmentRows.map((row, i) => `── Seg ${i + 1} ──\n${buildFullPrompt(row)}`).join('\n\n') || '尚未有分段內容';
+  box.style.display = 'block';
+});
+
+// ---------- Shared-field translate ----------
+async function translateSharedField(elId, target) {
+  const el = document.getElementById(elId);
+  if (!el.value.trim()) return;
+  if (el.dataset.original == null) el.dataset.original = el.value;
+  el.value = await translateText(el.value, target);
+}
+document.getElementById('translateSharedEn').addEventListener('click', () => translateSharedField('summaryInput', 'en'));
+document.getElementById('translateSharedZh').addEventListener('click', () => translateSharedField('summaryInput', 'zh-TW'));
+
+// ---------- Playback area: one shared player, defaults to the combined
+// final video, per-segment "play" buttons swap what it shows ----------
+function showCombinedVideo(jobId) {
+  document.getElementById('playbackLabel').textContent = '完整合併影片';
+  document.getElementById('playbackArea').innerHTML = `
+    <video controls autoplay src="${API}/api/jobs/${jobId}/video"></video>
+    <div style="margin-top:10px"><a class="btn-download" href="${API}/api/jobs/${jobId}/video" download>下載完整影片</a></div>
+  `;
+}
+function showSegmentVideo(jobId, index) {
+  document.getElementById('playbackLabel').textContent = `第 ${index + 1} 段`;
+  document.getElementById('playbackArea').innerHTML =
+    `<video controls autoplay src="${API}/api/jobs/${jobId}/segments/${index}/video"></video>`;
+}
 
 function segmentCount() {
   const min = parseFloat(document.getElementById('durationMinutes').value) || 1;
@@ -745,6 +952,11 @@ function updateHints() {
   const min = parseFloat(document.getElementById('durationMinutes').value) || 1;
   document.getElementById('segmentCountHint').textContent = `${min}分 ÷ ${document.getElementById('segmentLength').value}秒 = ${n} 段`;
   document.getElementById('estLine').textContent = `預估約 ${Math.round(n * 10)} 分鐘（每段約 10 分鐘，turbo LoRA，未啟用 SageAttention）`;
+  if (!formLocked) {
+    ensureSegmentRowsCount(n);
+    if (activeSegmentIndex >= n) activeSegmentIndex = n - 1;
+    renderSegmentCards();
+  }
 }
 document.getElementById('durationMinutes').addEventListener('input', updateHints);
 document.getElementById('segmentLength').addEventListener('input', updateHints);
@@ -781,8 +993,10 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     await checkComfyHealth();
     if (!comfyUiAlive) throw new Error('ComfyUI 目前無法連線，請先確認 ComfyUI 是否正在執行後再試一次');
 
-    const promptText = document.getElementById('prompt').value.trim();
-    if (!promptText) throw new Error('請輸入 prompt');
+    if (!segmentRows.length || !segmentRows.some(r => r.shot.trim())) {
+      throw new Error('請至少在一段填入 Shot 內容');
+    }
+    const segPrompts = segmentRows.map(buildFullPrompt);
 
     const imageFiles = document.getElementById('refImages').files;
     const refImageNames = [];
@@ -809,7 +1023,8 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 
     btn.textContent = '送出生成中...';
     const fd = new FormData();
-    fd.append('prompt', promptText);
+    fd.append('prompt', segPrompts[0] || '');
+    fd.append('segment_prompts', JSON.stringify(segPrompts));
     fd.append('ref_image_filenames', JSON.stringify(refImageNames));
     fd.append('ref_audio_filename', refAudioName);
     fd.append('bg_music_filename', bgMusicName);
@@ -828,39 +1043,18 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     if (!res.ok) throw new Error(body.error || '送出生成失敗');
     const { job_id } = body;
     localStorage.setItem(ACTIVE_JOB_KEY, job_id);
+    currentJobId = job_id;
+    formLocked = true;
+    renderSegmentCards();
     btn.textContent = '生成中...';
     pollJob(job_id, btn);
+    refreshJobHistory();
   } catch (e) {
     errBox.innerHTML = `<div class="msg error">${e.message}</div>`;
     btn.disabled = false;
     btn.textContent = '開始生成';
   }
 });
-
-function renderQueue(segments) {
-  const list = document.getElementById('queueList');
-  if (!segments.length) { list.innerHTML = '<div class="empty-state">尚未開始生成</div>'; return; }
-  document.getElementById('queueHint').textContent =
-    `${segments.filter(s => s.status === 'done').length} / ${segments.length} 完成`;
-  list.innerHTML = segments.map(s => {
-    const pillClass = s.status === 'done' ? 'done' : s.status === 'running' ? 'running' : s.status === 'error' ? 'error' : 'pending';
-    const pillText = s.status === 'done' ? '完成' : s.status === 'running' ? '生成中' : s.status === 'error' ? '失敗' : '等待中';
-    let timeText = '—';
-    let timeAttr = '';
-    if (s.elapsed != null) {
-      timeText = `${s.elapsed}s`;
-    } else if (s.status === 'running' && s.started_at != null) {
-      timeText = `${(Date.now() / 1000 - s.started_at).toFixed(1)}s`;
-      timeAttr = ` data-started-at="${s.started_at}"`;
-    }
-    return `<div class="seg-row">
-      <span class="seg-index mono">${String(s.index + 1).padStart(2, '0')}</span>
-      <div></div>
-      <span class="seg-time"${timeAttr}>${timeText}</span>
-      <span class="pill ${pillClass}">${pillText}</span>
-    </div>`;
-  }).join('');
-}
 
 // Ticks running-segment timers every second, independent of the 4s poll
 // interval, so the elapsed time visibly counts up while a segment runs.
@@ -871,6 +1065,31 @@ function tickRunningTimers() {
   });
 }
 setInterval(tickRunningTimers, 1000);
+
+// Populates the shared fields + segment rows from a job's stored
+// prompt(s) - used both when resuming and when loading a saved project's
+// generated-video entry from job history. Reuses parseTemplateIntoParts
+// since each segment prompt is composed in the same 6-section shape.
+function loadJobPromptsIntoForm(j) {
+  const prompts = (j.segment_prompts && j.segment_prompts.length) ? j.segment_prompts : (j.prompt ? [j.prompt] : []);
+  if (!prompts.length) return;
+  const first = parseTemplateIntoParts(prompts[0]);
+  document.getElementById('subjectDefinitions').value = first.subject;
+  document.getElementById('subjectDefinitions').dataset.auto = 'false';
+  document.getElementById('summaryInput').value = first.summary;
+  document.getElementById('musicInput').value = first.music || 'N/A';
+  segmentRows = prompts.map(p => {
+    const parts = parseTemplateIntoParts(p);
+    return { shot: parts.shot, camera: parts.camera, soundscape: parts.soundscape };
+  });
+  if (j.ref_image_filenames && j.ref_image_filenames.length) {
+    document.getElementById('refImagesPreview').innerHTML = j.ref_image_filenames.map((name, i) => `
+      <div class="ref-image-slot">
+        <img src="${API}/api/uploads/image/${encodeURIComponent(name)}" alt="人物${i + 1}" />
+        <span class="ref-image-tag">人物${i + 1}</span>
+      </div>`).join('') + `<div class="hint-note" style="width:100%;font-size:11px;color:var(--text-faint)">（上次送出時使用的參考圖，重新選檔會取代）</div>`;
+  }
+}
 
 function pollJob(jobId, btn) {
   if (pollTimer) clearInterval(pollTimer);
@@ -886,22 +1105,21 @@ function pollJob(jobId, btn) {
       return;
     }
     const j = await res.json();
-    renderQueue(j.segments);
+    renderSegmentCards(j.segments);
     if (j.status === 'done') {
       clearInterval(pollTimer);
       localStorage.removeItem(ACTIVE_JOB_KEY);
       btn.disabled = false;
       btn.textContent = '開始生成';
-      document.getElementById('videoArea').innerHTML = `
-        <video controls src="${API}/api/jobs/${jobId}/video"></video>
-        <div style="margin-top:10px"><a class="btn-download" href="${API}/api/jobs/${jobId}/video" download>下載完整影片</a></div>
-      `;
+      showCombinedVideo(jobId);
+      refreshJobHistory();
     } else if (j.status === 'error') {
       clearInterval(pollTimer);
       localStorage.removeItem(ACTIVE_JOB_KEY);
       btn.disabled = false;
       btn.textContent = '開始生成';
       document.getElementById('errorMsg').innerHTML = `<div class="msg error">生成失敗：${j.error || '未知錯誤'}</div>`;
+      refreshJobHistory();
     }
   }, 4000);
 }
@@ -928,25 +1146,14 @@ async function resumeActiveJob() {
     const res = await fetch(`${API}/api/jobs/${jobId}`);
     if (!res.ok) { localStorage.removeItem(ACTIVE_JOB_KEY); return; }
     const j = await res.json();
-    renderQueue(j.segments);
-
-    if (j.prompt) {
-      document.getElementById('prompt').value = j.prompt;
-    }
-    if (j.ref_image_filenames && j.ref_image_filenames.length) {
-      document.getElementById('refImagesPreview').innerHTML = j.ref_image_filenames.map((name, i) => `
-        <div class="ref-image-slot">
-          <img src="${API}/api/uploads/image/${encodeURIComponent(name)}" alt="人物${i + 1}" />
-          <span class="ref-image-tag">人物${i + 1}</span>
-        </div>`).join('') + `<div class="hint-note" style="width:100%;font-size:11px;color:var(--text-faint)">（上次送出時使用的參考圖，重新選檔會取代）</div>`;
-    }
+    currentJobId = jobId;
+    formLocked = true;
+    loadJobPromptsIntoForm(j);
+    renderSegmentCards(j.segments);
 
     if (j.status === 'done') {
       localStorage.removeItem(ACTIVE_JOB_KEY);
-      document.getElementById('videoArea').innerHTML = `
-        <video controls src="${API}/api/jobs/${jobId}/video"></video>
-        <div style="margin-top:10px"><a class="btn-download" href="${API}/api/jobs/${jobId}/video" download>下載完整影片</a></div>
-      `;
+      showCombinedVideo(jobId);
     } else if (j.status === 'error') {
       localStorage.removeItem(ACTIVE_JOB_KEY);
       document.getElementById('errorMsg').innerHTML = `<div class="msg error">生成失敗：${j.error || '未知錯誤'}</div>`;
@@ -962,6 +1169,145 @@ async function resumeActiveJob() {
   }
 }
 resumeActiveJob();
+
+// ---------- Job history (past generated videos) ----------
+async function refreshJobHistory() {
+  try {
+    const res = await fetch(`${API}/api/jobs`);
+    if (!res.ok) return;
+    const { jobs } = await res.json();
+    const list = document.getElementById('jobHistoryList');
+    if (!jobs.length) { list.innerHTML = '<div class="empty-state">尚無生成紀錄</div>'; return; }
+    list.innerHTML = jobs.map(j => `
+      <div class="seg-row" style="grid-template-columns: 1fr auto auto">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeAttr(j.summary || j.job_id)}">${escapeHtml(j.summary || j.job_id)}</span>
+        <span class="pill ${j.status === 'done' ? 'done' : j.status === 'error' ? 'error' : 'running'}">${j.status}</span>
+        ${j.has_final_video ? `<button class="btn-download" data-open-job="${j.job_id}" type="button" style="padding:4px 10px">開啟</button>` : '<span></span>'}
+      </div>`).join('');
+    list.querySelectorAll('[data-open-job]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const jobId = btn.dataset.openJob;
+        const r = await fetch(`${API}/api/jobs/${jobId}`);
+        const j = await r.json();
+        currentJobId = jobId;
+        formLocked = true;
+        loadJobPromptsIntoForm(j);
+        renderSegmentCards(j.segments);
+        showCombinedVideo(jobId);
+      });
+    });
+  } catch (e) { /* non-critical */ }
+}
+refreshJobHistory();
+
+// ---------- Project management (save / load / new / clone / delete) ----------
+let currentProjectId = null;
+
+function collectProjectData() {
+  return {
+    id: currentProjectId,
+    name: document.getElementById('projectNameInput').value.trim() || '未命名專案',
+    subject_definitions: document.getElementById('subjectDefinitions').value,
+    summary: document.getElementById('summaryInput').value,
+    music: document.getElementById('musicInput').value,
+    duration_minutes: document.getElementById('durationMinutes').value,
+    segment_length_seconds: document.getElementById('segmentLength').value,
+    segment_rows: segmentRows.map(r => ({ shot: r.shot, camera: r.camera, soundscape: r.soundscape })),
+  };
+}
+
+function applyProjectData(data) {
+  currentProjectId = data.id;
+  document.getElementById('projectNameInput').value = data.name || '';
+  document.getElementById('subjectDefinitions').value = data.subject_definitions || '';
+  document.getElementById('subjectDefinitions').dataset.auto = 'false';
+  document.getElementById('summaryInput').value = data.summary || '';
+  document.getElementById('musicInput').value = data.music || 'N/A';
+  document.getElementById('durationMinutes').value = data.duration_minutes || 0.25;
+  document.getElementById('segmentLength').value = data.segment_length_seconds || 15;
+  segmentRows = (data.segment_rows || []).map(r => ({ shot: r.shot || '', camera: r.camera || '', soundscape: r.soundscape || '' }));
+  if (!segmentRows.length) segmentRows.push({ shot: '', camera: '', soundscape: '' });
+  formLocked = false;
+  currentJobId = null;
+  document.getElementById('generateBtn').disabled = !comfyUiAlive;
+  document.getElementById('generateBtn').textContent = '開始生成';
+  document.getElementById('playbackArea').innerHTML = '<div class="empty-state">生成完成後會顯示在這裡</div>';
+  document.getElementById('playbackLabel').textContent = '尚未有影片';
+  renderSegmentCards();
+}
+
+async function refreshProjectSelect() {
+  const res = await fetch(`${API}/api/projects`);
+  const { projects } = await res.json();
+  const sel = document.getElementById('projectSelect');
+  sel.innerHTML = '<option value="">（未載入專案）</option>' +
+    projects.map(p => `<option value="${escapeAttr(p.id)}">${escapeHtml(p.name)}</option>`).join('');
+}
+refreshProjectSelect();
+
+document.getElementById('projectNewBtn').addEventListener('click', () => {
+  currentProjectId = null;
+  document.getElementById('projectSelect').value = '';
+  document.getElementById('projectNameInput').value = '';
+  document.getElementById('subjectDefinitions').value = '';
+  document.getElementById('subjectDefinitions').dataset.auto = 'true';
+  document.getElementById('summaryInput').value = '';
+  document.getElementById('musicInput').value = 'N/A';
+  document.getElementById('durationMinutes').value = '0.25';
+  document.getElementById('segmentLength').value = '15';
+  segmentRows = [];
+  formLocked = false;
+  currentJobId = null;
+  document.getElementById('generateBtn').disabled = !comfyUiAlive;
+  document.getElementById('generateBtn').textContent = '開始生成';
+  document.getElementById('playbackArea').innerHTML = '<div class="empty-state">生成完成後會顯示在這裡</div>';
+  document.getElementById('playbackLabel').textContent = '尚未有影片';
+  document.getElementById('refImagesPreview').innerHTML = '';
+  document.getElementById('refImages').value = '';
+  updateHints();
+});
+
+document.getElementById('projectLoadBtn').addEventListener('click', async () => {
+  const id = document.getElementById('projectSelect').value;
+  if (!id) return;
+  const res = await fetch(`${API}/api/projects/${id}`);
+  if (!res.ok) { alert('載入失敗'); return; }
+  applyProjectData(await res.json());
+});
+
+document.getElementById('projectSaveBtn').addEventListener('click', async () => {
+  const data = collectProjectData();
+  const res = await fetch(`${API}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) { alert('儲存失敗'); return; }
+  const saved = await res.json();
+  currentProjectId = saved.id;
+  await refreshProjectSelect();
+  document.getElementById('projectSelect').value = saved.id;
+});
+
+document.getElementById('projectCloneBtn').addEventListener('click', async () => {
+  const id = document.getElementById('projectSelect').value;
+  if (!id) { alert('請先選擇要複製的專案'); return; }
+  const res = await fetch(`${API}/api/projects/${id}/clone`, { method: 'POST' });
+  if (!res.ok) { alert('複製失敗'); return; }
+  const cloned = await res.json();
+  await refreshProjectSelect();
+  document.getElementById('projectSelect').value = cloned.id;
+  applyProjectData(cloned);
+});
+
+document.getElementById('projectDeleteBtn').addEventListener('click', async () => {
+  const id = document.getElementById('projectSelect').value;
+  if (!id) return;
+  if (!confirm('確定刪除這個專案？')) return;
+  await fetch(`${API}/api/projects/${id}`, { method: 'DELETE' });
+  if (currentProjectId === id) currentProjectId = null;
+  await refreshProjectSelect();
+});
 </script>
 </body>
 </html>

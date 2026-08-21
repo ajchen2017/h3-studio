@@ -9,7 +9,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,12 +25,14 @@ JOBS_DIR = Path(__file__).parent / "jobs"
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 VOICE_PROFILES_DIR = Path(__file__).parent / "voice_profiles"
 VOICE_PROFILES_INDEX = VOICE_PROFILES_DIR / "index.json"
+PROJECTS_DIR = Path(__file__).parent / "projects"
 FFMPEG = "ffmpeg"
 FFPROBE = "ffprobe"
 
 JOBS_DIR.mkdir(exist_ok=True)
 UPLOADS_DIR.mkdir(exist_ok=True)
 VOICE_PROFILES_DIR.mkdir(exist_ok=True)
+PROJECTS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="H3 Studio API")
 app.add_middleware(
@@ -281,8 +283,15 @@ def _run_job(job_id: str, params: dict):
     job = JOBS[job_id]
     try:
         segment_length = params["segment_length_seconds"]
-        total_seconds = params["duration_minutes"] * 60
-        n_segments = max(1, math.ceil(total_seconds / segment_length))
+        segment_prompts = params.get("segment_prompts") or None
+        if segment_prompts:
+            # Per-segment prompts (from the segment table UI) are
+            # authoritative about how many segments there are - duration_minutes
+            # is just derived display info at that point, not a source of truth.
+            n_segments = len(segment_prompts)
+        else:
+            total_seconds = params["duration_minutes"] * 60
+            n_segments = max(1, math.ceil(total_seconds / segment_length))
         job["segments"] = [
             {"index": i, "status": "pending", "prompt_id": None, "output_file": None, "elapsed": None, "started_at": None}
             for i in range(n_segments)
@@ -325,8 +334,9 @@ def _run_job(job_id: str, params: dict):
             _save_job_state(job_id)
 
             prefix = f"video/h3studio_{job_id}_seg{i:03d}"
+            seg_prompt = segment_prompts[i] if segment_prompts else params["prompt"]
             wf = build_workflow(
-                prompt=params["prompt"],
+                prompt=seg_prompt,
                 ref_image_filenames=ref_images[:3],
                 ref_audio_filename=ref_audio,
                 bg_music_filename=bg_music_trimmed,
@@ -448,6 +458,7 @@ async def system_stats():
 @app.post("/api/generate")
 async def generate(
     prompt: str = Form(...),
+    segment_prompts: str = Form("[]"),
     ref_image_filenames: str = Form("[]"),
     ref_audio_filename: str = Form(""),
     bg_music_filename: str = Form(""),
@@ -472,8 +483,10 @@ async def generate(
         )
 
     job_id = uuid.uuid4().hex[:12]
+    parsed_segment_prompts = json.loads(segment_prompts)
     params = {
         "prompt": prompt,
+        "segment_prompts": parsed_segment_prompts or None,
         "ref_image_filenames": json.loads(ref_image_filenames),
         "ref_audio_filename": ref_audio_filename or None,
         "bg_music_filename": bg_music_filename or None,
@@ -492,6 +505,31 @@ async def generate(
     _save_job_state(job_id)
     asyncio.get_event_loop().run_in_executor(None, _run_job, job_id, params)
     return {"job_id": job_id}
+
+
+@app.get("/api/jobs")
+async def list_jobs():
+    """Generation history - lets the frontend link back to previously
+    produced videos, newest first."""
+    candidates = [jid for jid in JOBS if _job_state_path(jid).exists()]
+    candidates.sort(key=lambda jid: _job_state_path(jid).stat().st_mtime, reverse=True)
+    out = []
+    for jid in candidates[:50]:
+        job = JOBS[jid]
+        params = job.get("params", {})
+        prompt = params.get("prompt") or ""
+        summary_match = None
+        for line in prompt.splitlines():
+            if line.strip().lower().startswith("summary:"):
+                summary_match = line.split(":", 1)[1].strip()
+                break
+        out.append({
+            "job_id": jid,
+            "status": job["status"],
+            "has_final_video": "final_video" in job,
+            "summary": summary_match or prompt[:60],
+        })
+    return {"jobs": out}
 
 
 @app.get("/api/jobs/latest")
@@ -519,8 +557,23 @@ async def job_status(job_id: str):
         "error": job.get("error"),
         "has_final_video": "final_video" in job,
         "prompt": params.get("prompt"),
+        "segment_prompts": params.get("segment_prompts"),
         "ref_image_filenames": params.get("ref_image_filenames") or [],
     }
+
+
+@app.get("/api/jobs/{job_id}/segments/{index}/video")
+async def segment_video(job_id: str, index: int):
+    job = JOBS.get(job_id)
+    if not job:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    segments = job.get("segments", [])
+    if index < 0 or index >= len(segments) or not segments[index].get("output_file"):
+        return JSONResponse({"error": "not ready"}, status_code=404)
+    path = Path(segments[index]["output_file"])
+    if not path.exists():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path, media_type="video/mp4")
 
 
 @app.get("/api/uploads/image/{filename}")
@@ -542,6 +595,66 @@ async def job_video(job_id: str):
     if not job or "final_video" not in job:
         return JSONResponse({"error": "not ready"}, status_code=404)
     return FileResponse(job["final_video"], media_type="video/mp4")
+
+
+def _project_path(project_id: str) -> Path:
+    return PROJECTS_DIR / f"{project_id}.json"
+
+
+@app.get("/api/projects")
+async def list_projects():
+    out = []
+    for path in PROJECTS_DIR.glob("*.json"):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            out.append({"id": path.stem, "name": data.get("name", path.stem), "updated_at": data.get("updated_at", 0)})
+        except Exception:
+            continue
+    out.sort(key=lambda p: p["updated_at"], reverse=True)
+    return {"projects": out}
+
+
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: str):
+    path = _project_path(project_id)
+    if not path.exists():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@app.post("/api/projects")
+async def save_project(request: Request):
+    body = await request.json()
+    project_id = body.get("id") or uuid.uuid4().hex[:12]
+    body["id"] = project_id
+    body["updated_at"] = time.time()
+    with open(_project_path(project_id), "w", encoding="utf-8") as f:
+        json.dump(body, f, ensure_ascii=False)
+    return body
+
+
+@app.post("/api/projects/{project_id}/clone")
+async def clone_project(project_id: str):
+    src = _project_path(project_id)
+    if not src.exists():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    with open(src, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    new_id = uuid.uuid4().hex[:12]
+    data["id"] = new_id
+    data["name"] = f"{data.get('name', project_id)} (複製)"
+    data["updated_at"] = time.time()
+    with open(_project_path(new_id), "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    return data
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: str):
+    _project_path(project_id).unlink(missing_ok=True)
+    return {"ok": True}
 
 
 app.mount("/", StaticFiles(directory=str(Path(__file__).parent.parent / "frontend"), html=True), name="frontend")
