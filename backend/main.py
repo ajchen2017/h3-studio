@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import os
 import shutil
 import subprocess
 import time
@@ -9,15 +10,36 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, Request, UploadFile, File, Form
+from fastapi import Depends, FastAPI, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import psutil
 
+import auth
+import email_service
 from workflow_builder import build_workflow
 from comfy_client import queue_via_prompt_api, get_history, check_comfyui_alive
+
+
+def _load_dotenv():
+    """No new dependency for something this small - just KEY=VALUE lines,
+    same shape python-dotenv would read. Real values (SMTP password, etc.)
+    live only in the gitignored .env file, never in this source file."""
+    env_path = Path(__file__).parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_dotenv()
+auth.seed_password_if_missing(os.environ.get("ADMIN_INITIAL_PASSWORD", ""))
 
 COMFYUI_INPUT_DIR = Path(r"C:\Users\user\ai\ComfyUI\ComfyUI\input")
 COMFYUI_OUTPUT_DIR = Path(r"C:\Users\user\ai\ComfyUI\ComfyUI\output")
@@ -46,6 +68,57 @@ app.add_middleware(
 )
 
 JOBS: dict[str, dict] = {}
+
+
+# ── Auth ─────────────────────────────────────────────────────
+@app.post("/api/auth/login")
+async def login(password: str = Form(...)):
+    if not auth.is_password_set():
+        return JSONResponse({"error": "尚未設定密碼，請先用「忘記密碼」流程設定一組"}, status_code=400)
+    if not auth.check_password(password):
+        return JSONResponse({"error": "密碼錯誤"}, status_code=401)
+    token = auth.create_token({"sub": "admin"})
+    return {"token": token}
+
+
+@app.get("/api/auth/me")
+async def auth_me(user: dict = Depends(auth.get_admin_user)):
+    return {"ok": True}
+
+
+@app.post("/api/auth/change-password")
+async def change_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    user: dict = Depends(auth.get_admin_user),
+):
+    if not auth.check_password(current_password):
+        return JSONResponse({"error": "目前密碼不正確"}, status_code=400)
+    if len(new_password) < 6:
+        return JSONResponse({"error": "新密碼至少需要 6 個字元"}, status_code=400)
+    auth.set_password(new_password)
+    return {"ok": True}
+
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password():
+    token = auth.create_reset_token()
+    reset_url = f"https://studio.umaya.tw/?reset_token={token}"
+    html = email_service.build_reset_email_html(reset_url)
+    sent = email_service.send_email(auth.ADMIN_EMAIL, "H3 Studio 管理密碼重設", html)
+    if not sent:
+        return JSONResponse({"error": "寄送失敗，請稍後再試"}, status_code=502)
+    return {"ok": True}
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(token: str = Form(...), new_password: str = Form(...)):
+    if not auth.verify_reset_token(token):
+        return JSONResponse({"error": "連結無效或已過期，請重新申請"}, status_code=400)
+    if len(new_password) < 6:
+        return JSONResponse({"error": "新密碼至少需要 6 個字元"}, status_code=400)
+    auth.set_password(new_password)
+    return {"ok": True}
 
 
 def _job_state_path(job_id: str) -> Path:
@@ -106,12 +179,12 @@ def _save_voice_profiles(profiles: list[dict]):
 
 
 @app.get("/api/voice-profiles")
-async def list_voice_profiles():
+async def list_voice_profiles(user: dict = Depends(auth.get_admin_user)):
     return {"profiles": _load_voice_profiles()}
 
 
 @app.post("/api/voice-profiles")
-async def create_voice_profile(name: str = Form(...), file: UploadFile = File(...)):
+async def create_voice_profile(name: str = Form(...), file: UploadFile = File(...), user: dict = Depends(auth.get_admin_user)):
     ext = Path(file.filename).suffix or ".webm"
     profile_id = uuid.uuid4().hex[:12]
     filename = f"{profile_id}{ext}"
@@ -145,7 +218,7 @@ async def create_voice_profile(name: str = Form(...), file: UploadFile = File(..
 
 
 @app.delete("/api/voice-profiles/{profile_id}")
-async def delete_voice_profile(profile_id: str):
+async def delete_voice_profile(profile_id: str, user: dict = Depends(auth.get_admin_user)):
     profiles = _load_voice_profiles()
     match = next((p for p in profiles if p["id"] == profile_id), None)
     if not match:
@@ -158,7 +231,7 @@ async def delete_voice_profile(profile_id: str):
 
 
 @app.get("/api/voice-profiles/{profile_id}/audio")
-async def get_voice_profile_audio(profile_id: str):
+async def get_voice_profile_audio(profile_id: str, user: dict = Depends(auth.get_admin_user_flexible)):
     profiles = _load_voice_profiles()
     match = next((p for p in profiles if p["id"] == profile_id), None)
     if not match:
@@ -179,12 +252,12 @@ def _save_ref_image_library(entries: list[dict]):
 
 
 @app.get("/api/ref-image-library")
-async def list_ref_image_library():
+async def list_ref_image_library(user: dict = Depends(auth.get_admin_user)):
     return {"images": _load_ref_image_library()}
 
 
 @app.post("/api/ref-image-library")
-async def add_ref_image_library(name: str = Form(...), file: UploadFile = File(...)):
+async def add_ref_image_library(name: str = Form(...), file: UploadFile = File(...), user: dict = Depends(auth.get_admin_user)):
     ext = Path(file.filename).suffix or ".png"
     image_id = uuid.uuid4().hex[:12]
     # Saved directly into ComfyUI's input/ dir under a stable name, same
@@ -204,7 +277,7 @@ async def add_ref_image_library(name: str = Form(...), file: UploadFile = File(.
 
 
 @app.delete("/api/ref-image-library/{image_id}")
-async def delete_ref_image_library(image_id: str):
+async def delete_ref_image_library(image_id: str, user: dict = Depends(auth.get_admin_user)):
     entries = _load_ref_image_library()
     match = next((e for e in entries if e["id"] == image_id), None)
     if not match:
@@ -231,7 +304,7 @@ def _translate_text(text: str, target: str, source: str = "auto") -> str:
 
 
 @app.post("/api/translate")
-async def translate(text: str = Form(...), target: str = Form(...), source: str = Form("auto")):
+async def translate(text: str = Form(...), target: str = Form(...), source: str = Form("auto"), user: dict = Depends(auth.get_admin_user)):
     try:
         translated = _translate_text(text, target, source)
         return {"translated": translated}
@@ -240,25 +313,25 @@ async def translate(text: str = Form(...), target: str = Form(...), source: str 
 
 
 @app.post("/api/upload/image")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(file: UploadFile = File(...), user: dict = Depends(auth.get_admin_user)):
     name = _save_upload(file, COMFYUI_INPUT_DIR)
     return {"filename": name}
 
 
 @app.post("/api/upload/audio")
-async def upload_audio(file: UploadFile = File(...)):
+async def upload_audio(file: UploadFile = File(...), user: dict = Depends(auth.get_admin_user)):
     name = _save_upload(file, COMFYUI_INPUT_DIR)
     return {"filename": name}
 
 
 @app.post("/api/upload/video")
-async def upload_video(file: UploadFile = File(...)):
+async def upload_video(file: UploadFile = File(...), user: dict = Depends(auth.get_admin_user)):
     name = _save_upload(file, COMFYUI_INPUT_DIR)
     return {"filename": name}
 
 
 @app.post("/api/upload/music")
-async def upload_music(file: UploadFile = File(...)):
+async def upload_music(file: UploadFile = File(...), user: dict = Depends(auth.get_admin_user)):
     name = _save_upload(file, COMFYUI_INPUT_DIR)
     return {"filename": name}
 
@@ -494,7 +567,7 @@ def _gpu_stats() -> dict | None:
 
 
 @app.get("/api/system-stats")
-async def system_stats():
+async def system_stats(user: dict = Depends(auth.get_admin_user)):
     vm = psutil.virtual_memory()
     return {
         "gpu": _gpu_stats(),
@@ -524,6 +597,7 @@ async def generate(
     output_height: int = Form(480),
     output_fps: int = Form(24),
     seed: int | None = Form(None),
+    user: dict = Depends(auth.get_admin_user),
 ):
     # Fail fast rather than accepting the job and letting the user wait
     # through an edit-and-submit cycle before discovering ComfyUI is down.
@@ -560,7 +634,7 @@ async def generate(
 
 
 @app.get("/api/jobs")
-async def list_jobs():
+async def list_jobs(user: dict = Depends(auth.get_admin_user)):
     """Generation history - lets the frontend link back to previously
     produced videos, newest first."""
     candidates = [jid for jid in JOBS if _job_state_path(jid).exists()]
@@ -585,7 +659,7 @@ async def list_jobs():
 
 
 @app.get("/api/jobs/latest")
-async def latest_job():
+async def latest_job(user: dict = Depends(auth.get_admin_user)):
     """Lets the frontend recover a job it lost track of (e.g. the browser
     was closed before job_id got saved client-side, or localStorage was
     cleared) - falls back to each job folder's mtime since older jobs
@@ -598,7 +672,7 @@ async def latest_job():
 
 
 @app.get("/api/jobs/{job_id}")
-async def job_status(job_id: str):
+async def job_status(job_id: str, user: dict = Depends(auth.get_admin_user)):
     job = JOBS.get(job_id)
     if not job:
         return JSONResponse({"error": "not found"}, status_code=404)
@@ -615,7 +689,7 @@ async def job_status(job_id: str):
 
 
 @app.get("/api/jobs/{job_id}/segments/{index}/video")
-async def segment_video(job_id: str, index: int):
+async def segment_video(job_id: str, index: int, user: dict = Depends(auth.get_admin_user_flexible)):
     job = JOBS.get(job_id)
     if not job:
         return JSONResponse({"error": "not found"}, status_code=404)
@@ -629,7 +703,7 @@ async def segment_video(job_id: str, index: int):
 
 
 @app.get("/api/uploads/image/{filename}")
-async def get_uploaded_image(filename: str):
+async def get_uploaded_image(filename: str, user: dict = Depends(auth.get_admin_user_flexible)):
     # Reference images live in ComfyUI's own input/ dir (that's what the
     # workflow reads them from) - this just lets the frontend show a
     # thumbnail of what was actually submitted, e.g. when recovering a
@@ -642,7 +716,7 @@ async def get_uploaded_image(filename: str):
 
 
 @app.get("/api/jobs/{job_id}/video")
-async def job_video(job_id: str):
+async def job_video(job_id: str, user: dict = Depends(auth.get_admin_user_flexible)):
     job = JOBS.get(job_id)
     if not job or "final_video" not in job:
         return JSONResponse({"error": "not ready"}, status_code=404)
@@ -654,7 +728,7 @@ def _project_path(project_id: str) -> Path:
 
 
 @app.get("/api/projects")
-async def list_projects():
+async def list_projects(user: dict = Depends(auth.get_admin_user)):
     out = []
     for path in PROJECTS_DIR.glob("*.json"):
         try:
@@ -668,7 +742,7 @@ async def list_projects():
 
 
 @app.get("/api/projects/{project_id}")
-async def get_project(project_id: str):
+async def get_project(project_id: str, user: dict = Depends(auth.get_admin_user)):
     path = _project_path(project_id)
     if not path.exists():
         return JSONResponse({"error": "not found"}, status_code=404)
@@ -677,7 +751,7 @@ async def get_project(project_id: str):
 
 
 @app.post("/api/projects")
-async def save_project(request: Request):
+async def save_project(request: Request, user: dict = Depends(auth.get_admin_user)):
     body = await request.json()
     project_id = body.get("id") or uuid.uuid4().hex[:12]
     body["id"] = project_id
@@ -688,7 +762,7 @@ async def save_project(request: Request):
 
 
 @app.post("/api/projects/{project_id}/clone")
-async def clone_project(project_id: str):
+async def clone_project(project_id: str, user: dict = Depends(auth.get_admin_user)):
     src = _project_path(project_id)
     if not src.exists():
         return JSONResponse({"error": "not found"}, status_code=404)
@@ -704,7 +778,7 @@ async def clone_project(project_id: str):
 
 
 @app.delete("/api/projects/{project_id}")
-async def delete_project(project_id: str):
+async def delete_project(project_id: str, user: dict = Depends(auth.get_admin_user)):
     _project_path(project_id).unlink(missing_ok=True)
     return {"ok": True}
 

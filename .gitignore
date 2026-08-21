@@ -5,6 +5,8 @@ backend/uploads/
 backend/voice_profiles/
 backend/ref_images/
 backend/projects/
+backend/.env
+backend/auth_config.json
 *.pyc
 *.log
 _test_api.json

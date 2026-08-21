@@ -142,6 +142,11 @@
   .msg { font-size: 12.5px; padding: 8px 10px; border-radius: 5px; }
   .msg.error { background: var(--error-soft); color: var(--error); }
   .empty-state { color: var(--text-faint); font-size: 12.5px; padding: 20px; text-align: center; }
+  .auth-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 1000;
+    display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .auth-card { width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 28px 24px; }
+  .auth-card input { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -160,6 +165,30 @@
           <span class="cpu mono" id="statsCpuText">CPU —</span>
         </span>
       </span>
+      <button class="btn-download" id="logoutBtn" type="button">登出</button>
+    </div>
+  </div>
+
+  <div id="loginOverlay" class="auth-overlay" style="display:none">
+    <div class="auth-card">
+      <div class="brand-mark" style="margin-bottom:18px">H3<span class="accent-dot">·</span>STUDIO</div>
+      <div class="field-label"><span>管理密碼</span></div>
+      <input type="password" id="loginPasswordInput" placeholder="輸入密碼" autocomplete="current-password" />
+      <button class="btn-generate" id="loginSubmitBtn" type="button" style="margin-top:12px">登入</button>
+      <div class="row" style="margin-top:10px;justify-content:center">
+        <span class="hint" id="forgotPasswordLink" style="cursor:pointer;text-decoration:underline">忘記密碼？</span>
+      </div>
+      <div id="loginMsg" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div id="resetOverlay" class="auth-overlay" style="display:none">
+    <div class="auth-card">
+      <div class="brand-mark" style="margin-bottom:18px">H3<span class="accent-dot">·</span>STUDIO</div>
+      <div class="field-label"><span>設定新密碼</span></div>
+      <input type="password" id="resetNewPasswordInput" placeholder="新密碼（至少 6 碼）" autocomplete="new-password" />
+      <button class="btn-generate" id="resetSubmitBtn" type="button" style="margin-top:12px">設定密碼並登入</button>
+      <div id="resetMsg" style="margin-top:10px"></div>
     </div>
   </div>
 
@@ -243,6 +272,14 @@
             會自動裁切成分段長度，接到獨立的 ref_audio_1 插槽（跟人聲分開）。已實測生成結果確實抓到參考旋律的味道——
             建議在 prompt 的 non_diegetic_music 段落明確描述，例如「the score follows the mood and rhythm of the reference track」，效果更穩定。
           </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span>密碼管理</span></div>
+          <input type="password" id="changeCurrentPassword" placeholder="目前密碼" autocomplete="current-password" />
+          <input type="password" id="changeNewPassword" placeholder="新密碼（至少 6 碼）" autocomplete="new-password" style="margin-top:6px" />
+          <button class="btn-download" id="changePasswordBtn" type="button" style="margin-top:6px">變更密碼</button>
+          <div id="changePasswordMsg" style="margin-top:6px"></div>
         </div>
 
         <div class="field">
@@ -368,6 +405,131 @@
 <script>
 const API = "";
 
+// ---------- Auth ----------
+const AUTH_TOKEN_KEY = 'h3studio_auth_token';
+let authToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+
+function showLoginOverlay(message) {
+  document.getElementById('resetOverlay').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('loginMsg').innerHTML = message ? `<div class="msg error">${message}</div>` : '';
+}
+function hideAuthOverlays() {
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('resetOverlay').style.display = 'none';
+}
+
+// Wraps fetch() for every authenticated API call: attaches the bearer
+// token, and if the server says the session is invalid/expired, drops
+// the stale token and re-shows the login screen instead of leaving the
+// app silently broken.
+async function authFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const hadToken = !!authToken;
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    authToken = '';
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    showLoginOverlay(hadToken ? '登入已過期，請重新登入' : '');
+  }
+  return res;
+}
+
+// For <video>/<audio>/<img> elements, which can't send an Authorization
+// header - the token rides along as a query param instead (server-side
+// get_admin_user_flexible accepts either).
+function mediaUrl(url) {
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}token=${encodeURIComponent(authToken)}`;
+}
+
+document.getElementById('loginSubmitBtn').addEventListener('click', async () => {
+  const password = document.getElementById('loginPasswordInput').value;
+  if (!password) return;
+  const fd = new FormData();
+  fd.append('password', password);
+  try {
+    const res = await fetch(`${API}/api/auth/login`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) { document.getElementById('loginMsg').innerHTML = `<div class="msg error">${body.error || '登入失敗'}</div>`; return; }
+    authToken = body.token;
+    localStorage.setItem(AUTH_TOKEN_KEY, authToken);
+    location.reload();
+  } catch (e) {
+    document.getElementById('loginMsg').innerHTML = `<div class="msg error">連線失敗：${e.message}</div>`;
+  }
+});
+document.getElementById('loginPasswordInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('loginSubmitBtn').click();
+});
+
+document.getElementById('forgotPasswordLink').addEventListener('click', async () => {
+  document.getElementById('loginMsg').innerHTML = '寄送中...';
+  try {
+    const res = await fetch(`${API}/api/auth/forgot-password`, { method: 'POST' });
+    const body = await res.json();
+    document.getElementById('loginMsg').innerHTML = res.ok
+      ? `<div class="hint-note">已寄出重設信到管理信箱，請查收（30 分鐘內有效）</div>`
+      : `<div class="msg error">${body.error || '寄送失敗'}</div>`;
+  } catch (e) {
+    document.getElementById('loginMsg').innerHTML = `<div class="msg error">連線失敗：${e.message}</div>`;
+  }
+});
+
+document.getElementById('resetSubmitBtn').addEventListener('click', async () => {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('reset_token');
+  const newPassword = document.getElementById('resetNewPasswordInput').value;
+  if (newPassword.length < 6) {
+    document.getElementById('resetMsg').innerHTML = '<div class="msg error">新密碼至少需要 6 個字元</div>';
+    return;
+  }
+  const fd = new FormData();
+  fd.append('token', token);
+  fd.append('new_password', newPassword);
+  const res = await fetch(`${API}/api/auth/reset-password`, { method: 'POST', body: fd });
+  const body = await res.json();
+  if (!res.ok) { document.getElementById('resetMsg').innerHTML = `<div class="msg error">${body.error || '設定失敗'}</div>`; return; }
+  history.replaceState(null, '', location.pathname);
+  document.getElementById('resetMsg').innerHTML = '<div class="hint-note">密碼已設定，請重新登入</div>';
+  setTimeout(() => showLoginOverlay(), 800);
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  authToken = '';
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  location.reload();
+});
+
+async function initAuthGate() {
+  const params = new URLSearchParams(location.search);
+  const resetToken = params.get('reset_token');
+  if (resetToken) {
+    document.getElementById('resetOverlay').style.display = 'flex';
+    return false;
+  }
+  if (!authToken) {
+    showLoginOverlay();
+    return false;
+  }
+  try {
+    const res = await fetch(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${authToken}` } });
+    if (!res.ok) {
+      authToken = '';
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      showLoginOverlay();
+      return false;
+    }
+  } catch (e) {
+    showLoginOverlay('無法連線到伺服器');
+    return false;
+  }
+  hideAuthOverlays();
+  return true;
+}
+const authReady = initAuthGate();
+
 // ---------- ComfyUI health check (fail fast, before the user fills out the whole form) ----------
 let comfyUiAlive = false;
 
@@ -431,7 +593,7 @@ function drawStatsChart() {
 
 async function updateSystemStats() {
   try {
-    const res = await fetch(`${API}/api/system-stats`);
+    const res = await authFetch(`${API}/api/system-stats`);
     const j = await res.json();
 
     const gpuUtil = j.gpu ? j.gpu.util_percent : 0;
@@ -684,7 +846,7 @@ async function translateText(text, target) {
   const fd = new FormData();
   fd.append('text', text);
   fd.append('target', target);
-  const res = await fetch(`${API}/api/translate`, { method: 'POST', body: fd });
+  const res = await authFetch(`${API}/api/translate`, { method: 'POST', body: fd });
   if (!res.ok) throw new Error('翻譯失敗');
   const j = await res.json();
   return j.translated;
@@ -799,7 +961,7 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
   const fd = new FormData();
   fd.append('name', name);
   fd.append('file', recordedBlob, `${name}.webm`);
-  const res = await fetch(`${API}/api/voice-profiles`, { method: 'POST', body: fd });
+  const res = await authFetch(`${API}/api/voice-profiles`, { method: 'POST', body: fd });
   if (!res.ok) { alert('存檔失敗'); return; }
   document.getElementById('profileNameInput').value = '';
   document.getElementById('saveProfileRow').style.display = 'none';
@@ -809,7 +971,7 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
 });
 
 async function refreshProfileList() {
-  const res = await fetch(`${API}/api/voice-profiles`);
+  const res = await authFetch(`${API}/api/voice-profiles`);
   const { profiles } = await res.json();
   const list = document.getElementById('profileList');
   if (!profiles.length) {
@@ -834,7 +996,7 @@ async function refreshProfileList() {
   list.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('確定刪除這個 Profile？')) return;
-      await fetch(`${API}/api/voice-profiles/${btn.dataset.del}`, { method: 'DELETE' });
+      await authFetch(`${API}/api/voice-profiles/${btn.dataset.del}`, { method: 'DELETE' });
       if (selectedVoiceProfile && selectedVoiceProfile.id === btn.dataset.del) {
         selectedVoiceProfile = null;
         document.getElementById('selectedProfileHint').textContent = '';
@@ -850,14 +1012,14 @@ let refLibraryEntries = [];
 let selectedRefLibraryImages = []; // up to 3 entries picked from the library
 
 async function refreshRefLibrary() {
-  const res = await fetch(`${API}/api/ref-image-library`);
+  const res = await authFetch(`${API}/api/ref-image-library`);
   const { images } = await res.json();
   refLibraryEntries = images;
 
   const list = document.getElementById('refLibraryList');
   list.innerHTML = images.length ? images.map(img => `
     <div class="ref-image-slot" data-lib-id="${img.id}">
-      <img src="${API}/api/uploads/image/${encodeURIComponent(img.filename)}" alt="${escapeAttr(img.name)}" />
+      <img src="${mediaUrl(API + '/api/uploads/image/' + encodeURIComponent(img.filename))}" alt="${escapeAttr(img.name)}" />
       <span class="ref-image-tag">${escapeHtml(img.name)}</span>
       <button class="ref-image-remove" type="button" data-lib-delete="${img.id}" aria-label="刪除">×</button>
     </div>`).join('') : '<div class="empty-state">尚無存檔的人物照</div>';
@@ -865,7 +1027,7 @@ async function refreshRefLibrary() {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!confirm('確定刪除這張圖庫照片？')) return;
-      await fetch(`${API}/api/ref-image-library/${btn.dataset.libDelete}`, { method: 'DELETE' });
+      await authFetch(`${API}/api/ref-image-library/${btn.dataset.libDelete}`, { method: 'DELETE' });
       selectedRefLibraryImages = selectedRefLibraryImages.filter(x => x.id !== btn.dataset.libDelete);
       await refreshRefLibrary();
       renderSelectedRefLibrary();
@@ -878,6 +1040,24 @@ async function refreshRefLibrary() {
 }
 refreshRefLibrary();
 
+// ---------- Change password ----------
+document.getElementById('changePasswordBtn').addEventListener('click', async () => {
+  const current = document.getElementById('changeCurrentPassword').value;
+  const next = document.getElementById('changeNewPassword').value;
+  const msg = document.getElementById('changePasswordMsg');
+  if (!current || !next) { msg.innerHTML = '<div class="msg error">請填寫目前密碼與新密碼</div>'; return; }
+  if (next.length < 6) { msg.innerHTML = '<div class="msg error">新密碼至少需要 6 個字元</div>'; return; }
+  const fd = new FormData();
+  fd.append('current_password', current);
+  fd.append('new_password', next);
+  const res = await authFetch(`${API}/api/auth/change-password`, { method: 'POST', body: fd });
+  const body = await res.json();
+  if (!res.ok) { msg.innerHTML = `<div class="msg error">${body.error || '變更失敗'}</div>`; return; }
+  document.getElementById('changeCurrentPassword').value = '';
+  document.getElementById('changeNewPassword').value = '';
+  msg.innerHTML = '<div class="hint-note">密碼已變更</div>';
+});
+
 document.getElementById('refLibSaveBtn').addEventListener('click', async () => {
   const fileInput = document.getElementById('refLibFile');
   const name = document.getElementById('refLibNameInput').value.trim();
@@ -886,7 +1066,7 @@ document.getElementById('refLibSaveBtn').addEventListener('click', async () => {
   const fd = new FormData();
   fd.append('name', name);
   fd.append('file', fileInput.files[0]);
-  const res = await fetch(`${API}/api/ref-image-library`, { method: 'POST', body: fd });
+  const res = await authFetch(`${API}/api/ref-image-library`, { method: 'POST', body: fd });
   if (!res.ok) { alert('存檔失敗'); return; }
   fileInput.value = '';
   document.getElementById('refLibNameInput').value = '';
@@ -897,7 +1077,7 @@ function renderSelectedRefLibrary() {
   const preview = document.getElementById('refLibrarySelectedPreview');
   preview.innerHTML = selectedRefLibraryImages.map((img, i) => `
     <div class="ref-image-slot">
-      <img src="${API}/api/uploads/image/${encodeURIComponent(img.filename)}" alt="${escapeAttr(img.name)}" />
+      <img src="${mediaUrl(API + '/api/uploads/image/' + encodeURIComponent(img.filename))}" alt="${escapeAttr(img.name)}" />
       <span class="ref-image-tag">${escapeHtml(img.name)}</span>
       <button class="ref-image-remove" type="button" data-unselect-lib="${i}" aria-label="移除">×</button>
     </div>`).join('');
@@ -1089,14 +1269,14 @@ document.getElementById('translateSharedZh').addEventListener('click', () => tra
 function showCombinedVideo(jobId) {
   document.getElementById('playbackLabel').textContent = '完整合併影片';
   document.getElementById('playbackArea').innerHTML = `
-    <video controls autoplay src="${API}/api/jobs/${jobId}/video"></video>
-    <div style="margin-top:10px"><a class="btn-download" href="${API}/api/jobs/${jobId}/video" download>下載完整影片</a></div>
+    <video controls autoplay src="${mediaUrl(API + '/api/jobs/' + jobId + '/video')}"></video>
+    <div style="margin-top:10px"><a class="btn-download" href="${mediaUrl(API + '/api/jobs/' + jobId + '/video')}" download>下載完整影片</a></div>
   `;
 }
 function showSegmentVideo(jobId, index) {
   document.getElementById('playbackLabel').textContent = `第 ${index + 1} 段`;
   document.getElementById('playbackArea').innerHTML =
-    `<video controls autoplay src="${API}/api/jobs/${jobId}/segments/${index}/video"></video>`;
+    `<video controls autoplay src="${mediaUrl(API + '/api/jobs/' + jobId + '/segments/' + index + '/video')}"></video>`;
 }
 
 function segmentCount() {
@@ -1132,7 +1312,7 @@ for (const group of [document.getElementById('resToggle'), document.getElementBy
 async function uploadFile(file, kind) {
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch(`${API}/api/upload/${kind}`, { method: 'POST', body: fd });
+  const res = await authFetch(`${API}/api/upload/${kind}`, { method: 'POST', body: fd });
   if (!res.ok) throw new Error(`上傳失敗: ${kind}`);
   const j = await res.json();
   return j.filename;
@@ -1199,7 +1379,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     fd.append('output_height', resOpt.dataset.h);
     fd.append('output_fps', fpsOpt.dataset.fps);
 
-    const res = await fetch(`${API}/api/generate`, { method: 'POST', body: fd });
+    const res = await authFetch(`${API}/api/generate`, { method: 'POST', body: fd });
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || '送出生成失敗');
     const { job_id } = body;
@@ -1247,7 +1427,7 @@ function loadJobPromptsIntoForm(j) {
   if (j.ref_image_filenames && j.ref_image_filenames.length) {
     document.getElementById('refImagesPreview').innerHTML = j.ref_image_filenames.map((name, i) => `
       <div class="ref-image-slot">
-        <img src="${API}/api/uploads/image/${encodeURIComponent(name)}" alt="人物${i + 1}" />
+        <img src="${mediaUrl(API + '/api/uploads/image/' + encodeURIComponent(name))}" alt="人物${i + 1}" />
         <span class="ref-image-tag">人物${i + 1}</span>
       </div>`).join('') + `<div class="hint-note" style="width:100%;font-size:11px;color:var(--text-faint)">（上次送出時使用的參考圖，重新選檔會取代）</div>`;
   }
@@ -1256,7 +1436,7 @@ function loadJobPromptsIntoForm(j) {
 function pollJob(jobId, btn) {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
-    const res = await fetch(`${API}/api/jobs/${jobId}`);
+    const res = await authFetch(`${API}/api/jobs/${jobId}`);
     if (!res.ok) {
       // Job no longer known to the backend (e.g. state lost across a
       // restart) - stop chasing a dead job_id.
@@ -1296,7 +1476,7 @@ async function resumeActiveJob() {
     // recovery feature existed, or localStorage got cleared) - ask the
     // backend what it was last working on instead of showing a blank page.
     try {
-      const res = await fetch(`${API}/api/jobs/latest`);
+      const res = await authFetch(`${API}/api/jobs/latest`);
       if (!res.ok) return;
       const j = await res.json();
       if (['done', 'error'].includes(j.status)) return;
@@ -1305,7 +1485,7 @@ async function resumeActiveJob() {
   }
   const btn = document.getElementById('generateBtn');
   try {
-    const res = await fetch(`${API}/api/jobs/${jobId}`);
+    const res = await authFetch(`${API}/api/jobs/${jobId}`);
     if (!res.ok) { localStorage.removeItem(ACTIVE_JOB_KEY); return; }
     const j = await res.json();
     currentJobId = jobId;
@@ -1336,7 +1516,7 @@ resumeActiveJob();
 // ---------- Job history (past generated videos) ----------
 async function refreshJobHistory() {
   try {
-    const res = await fetch(`${API}/api/jobs`);
+    const res = await authFetch(`${API}/api/jobs`);
     if (!res.ok) return;
     const { jobs } = await res.json();
     const list = document.getElementById('jobHistoryList');
@@ -1350,7 +1530,7 @@ async function refreshJobHistory() {
     list.querySelectorAll('[data-open-job]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const jobId = btn.dataset.openJob;
-        const r = await fetch(`${API}/api/jobs/${jobId}`);
+        const r = await authFetch(`${API}/api/jobs/${jobId}`);
         const j = await r.json();
         currentJobId = jobId;
         formLocked = true;
@@ -1401,7 +1581,7 @@ function applyProjectData(data) {
 }
 
 async function refreshProjectSelect() {
-  const res = await fetch(`${API}/api/projects`);
+  const res = await authFetch(`${API}/api/projects`);
   const { projects } = await res.json();
   const sel = document.getElementById('projectSelect');
   sel.innerHTML = '<option value="">（未載入專案）</option>' +
@@ -1436,14 +1616,14 @@ document.getElementById('projectNewBtn').addEventListener('click', () => {
 document.getElementById('projectLoadBtn').addEventListener('click', async () => {
   const id = document.getElementById('projectSelect').value;
   if (!id) return;
-  const res = await fetch(`${API}/api/projects/${id}`);
+  const res = await authFetch(`${API}/api/projects/${id}`);
   if (!res.ok) { alert('載入失敗'); return; }
   applyProjectData(await res.json());
 });
 
 document.getElementById('projectSaveBtn').addEventListener('click', async () => {
   const data = collectProjectData();
-  const res = await fetch(`${API}/api/projects`, {
+  const res = await authFetch(`${API}/api/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -1458,7 +1638,7 @@ document.getElementById('projectSaveBtn').addEventListener('click', async () => 
 document.getElementById('projectCloneBtn').addEventListener('click', async () => {
   const id = document.getElementById('projectSelect').value;
   if (!id) { alert('請先選擇要複製的專案'); return; }
-  const res = await fetch(`${API}/api/projects/${id}/clone`, { method: 'POST' });
+  const res = await authFetch(`${API}/api/projects/${id}/clone`, { method: 'POST' });
   if (!res.ok) { alert('複製失敗'); return; }
   const cloned = await res.json();
   await refreshProjectSelect();
@@ -1470,7 +1650,7 @@ document.getElementById('projectDeleteBtn').addEventListener('click', async () =
   const id = document.getElementById('projectSelect').value;
   if (!id) return;
   if (!confirm('確定刪除這個專案？')) return;
-  await fetch(`${API}/api/projects/${id}`, { method: 'DELETE' });
+  await authFetch(`${API}/api/projects/${id}`, { method: 'DELETE' });
   if (currentProjectId === id) currentProjectId = null;
   await refreshProjectSelect();
 });
