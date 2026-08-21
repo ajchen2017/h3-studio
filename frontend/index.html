@@ -29,9 +29,18 @@
   .status-chips { display: flex; gap: 8px; flex-wrap: wrap; }
   .chip { display: inline-flex; align-items: center; gap: 6px; font-family: "Consolas", monospace;
     font-size: 11.5px; color: var(--text-dim); background: var(--panel-raised); border: 1px solid var(--line);
-    border-radius: 3px; padding: 5px 9px; }
+    border-radius: 3px; padding: 5px 9px; transition: all 0.2s ease; }
   .chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success);
     box-shadow: 0 0 0 3px var(--success-soft); }
+  .chip-live {
+    background: var(--success-soft); border-color: var(--success); color: var(--success);
+    font-size: 13px; font-weight: 700; padding: 7px 13px;
+  }
+  .stats-chip { padding: 5px 10px 5px 9px; }
+  .stats-chip canvas { display: block; }
+  .stats-legend { display: inline-flex; flex-direction: column; gap: 1px; margin-left: 8px; font-size: 10px; line-height: 1.3; }
+  .stats-legend span.gpu { color: #F2D94E; }
+  .stats-legend span.cpu { color: var(--text); }
   .grid { display: grid; grid-template-columns: 420px 1fr; gap: 20px; align-items: start; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
   @media (max-width: 480px) {
@@ -122,8 +131,13 @@
       <span class="chip"><span class="chip-dot"></span>RTX 5060 Ti · 16GB</span>
       <span class="chip"><span class="chip-dot"></span>Ref2VA + Turbo LoRA</span>
       <span class="chip" title="實測比不裝慢，暫停用"><span class="chip-dot" style="background:var(--text-faint);box-shadow:none"></span>SageAttention 已停用（實測較慢）</span>
-      <span class="chip" id="gpuChip"><span class="chip-dot" id="gpuDot"></span><span id="gpuText">GPU —</span></span>
-      <span class="chip" id="ramChip"><span class="chip-dot" id="ramDot"></span><span id="ramText">RAM —</span></span>
+      <span class="chip stats-chip" id="statsChip" title="GPU / CPU 即時使用率">
+        <canvas id="statsCanvas" width="150" height="30"></canvas>
+        <span class="stats-legend">
+          <span class="gpu mono" id="statsGpuText">GPU —</span>
+          <span class="cpu mono" id="statsCpuText">CPU —</span>
+        </span>
+      </span>
     </div>
   </div>
 
@@ -280,6 +294,7 @@ const API = "";
 let comfyUiAlive = false;
 
 async function checkComfyHealth() {
+  const chip = document.getElementById('comfyStatusChip');
   const dot = document.getElementById('comfyStatusDot');
   const text = document.getElementById('comfyStatusText');
   const genBtn = document.getElementById('generateBtn');
@@ -291,12 +306,14 @@ async function checkComfyHealth() {
     comfyUiAlive = false;
   }
   if (comfyUiAlive) {
+    chip.classList.add('chip-live');
     dot.style.background = 'var(--success)';
     dot.style.boxShadow = '0 0 0 3px var(--success-soft)';
     text.textContent = 'ComfyUI 連線正常';
     genBtn.disabled = false;
     genBtn.title = '';
   } else {
+    chip.classList.remove('chip-live');
     dot.style.background = 'var(--error)';
     dot.style.boxShadow = '0 0 0 3px var(--error-soft)';
     text.textContent = 'ComfyUI 離線 — 無法生成';
@@ -307,31 +324,49 @@ async function checkComfyHealth() {
 checkComfyHealth();
 setInterval(checkComfyHealth, 10000);
 
-// ---------- GPU / RAM live monitor ----------
+// ---------- GPU / CPU live scrolling chart ----------
+const STATS_HISTORY_LEN = 60; // ~2 minutes at a 2s poll interval
+const gpuHistory = [];
+const cpuHistory = [];
+const statsCanvas = document.getElementById('statsCanvas');
+const statsCtx = statsCanvas.getContext('2d');
+
+function drawStatsChart() {
+  const w = statsCanvas.width, h = statsCanvas.height;
+  statsCtx.clearRect(0, 0, w, h);
+
+  const plot = (series, color) => {
+    if (series.length < 2) return;
+    statsCtx.beginPath();
+    statsCtx.strokeStyle = color;
+    statsCtx.lineWidth = 1.4;
+    series.forEach((v, i) => {
+      const x = (i / (STATS_HISTORY_LEN - 1)) * w;
+      const y = h - (Math.max(0, Math.min(100, v)) / 100) * h;
+      i === 0 ? statsCtx.moveTo(x, y) : statsCtx.lineTo(x, y);
+    });
+    statsCtx.stroke();
+  };
+  plot(cpuHistory, '#EDEAE3');
+  plot(gpuHistory, '#F2D94E');
+}
+
 async function updateSystemStats() {
   try {
     const res = await fetch(`${API}/api/system-stats`);
     const j = await res.json();
 
-    const gpuDot = document.getElementById('gpuDot');
-    const gpuText = document.getElementById('gpuText');
-    if (j.gpu) {
-      const hot = j.gpu.util_percent > 90 || j.gpu.mem_percent > 90;
-      gpuDot.style.background = hot ? 'var(--warning)' : 'var(--success)';
-      gpuDot.style.boxShadow = hot ? '0 0 0 3px var(--warning-soft)' : '0 0 0 3px var(--success-soft)';
-      gpuText.textContent = `GPU ${j.gpu.util_percent.toFixed(0)}% · ${(j.gpu.mem_used_mb / 1024).toFixed(1)}/${(j.gpu.mem_total_mb / 1024).toFixed(1)}GB · ${j.gpu.temp_c.toFixed(0)}°C`;
-    } else {
-      gpuDot.style.background = 'var(--text-faint)';
-      gpuDot.style.boxShadow = 'none';
-      gpuText.textContent = 'GPU 無法讀取';
-    }
+    const gpuUtil = j.gpu ? j.gpu.util_percent : 0;
+    gpuHistory.push(gpuUtil);
+    cpuHistory.push(j.cpu_percent || 0);
+    if (gpuHistory.length > STATS_HISTORY_LEN) gpuHistory.shift();
+    if (cpuHistory.length > STATS_HISTORY_LEN) cpuHistory.shift();
+    drawStatsChart();
 
-    const ramDot = document.getElementById('ramDot');
-    const ramText = document.getElementById('ramText');
-    const ramHot = j.ram.percent > 90;
-    ramDot.style.background = ramHot ? 'var(--warning)' : 'var(--success)';
-    ramDot.style.boxShadow = ramHot ? '0 0 0 3px var(--warning-soft)' : '0 0 0 3px var(--success-soft)';
-    ramText.textContent = `RAM ${j.ram.percent.toFixed(0)}% · ${j.ram.used_gb}/${j.ram.total_gb}GB`;
+    document.getElementById('statsGpuText').textContent = j.gpu
+      ? `GPU ${gpuUtil.toFixed(0)}% · ${j.gpu.temp_c.toFixed(0)}°C`
+      : 'GPU —';
+    document.getElementById('statsCpuText').textContent = `CPU ${(j.cpu_percent || 0).toFixed(0)}%`;
   } catch (e) {
     // Non-critical monitor - fail silently rather than spamming the UI.
   }
