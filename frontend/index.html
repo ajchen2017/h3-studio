@@ -733,6 +733,7 @@ async function uploadFile(file, kind) {
 }
 
 let pollTimer = null;
+const ACTIVE_JOB_KEY = "h3studio_active_job_id";
 
 document.getElementById('generateBtn').addEventListener('click', async () => {
   const btn = document.getElementById('generateBtn');
@@ -790,6 +791,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || '送出生成失敗');
     const { job_id } = body;
+    localStorage.setItem(ACTIVE_JOB_KEY, job_id);
     btn.textContent = '生成中...';
     pollJob(job_id, btn);
   } catch (e) {
@@ -835,12 +837,23 @@ function tickRunningTimers() {
 setInterval(tickRunningTimers, 1000);
 
 function pollJob(jobId, btn) {
+  if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
     const res = await fetch(`${API}/api/jobs/${jobId}`);
+    if (!res.ok) {
+      // Job no longer known to the backend (e.g. state lost across a
+      // restart) - stop chasing a dead job_id.
+      clearInterval(pollTimer);
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+      btn.disabled = false;
+      btn.textContent = '開始生成';
+      return;
+    }
     const j = await res.json();
     renderQueue(j.segments);
     if (j.status === 'done') {
       clearInterval(pollTimer);
+      localStorage.removeItem(ACTIVE_JOB_KEY);
       btn.disabled = false;
       btn.textContent = '開始生成';
       document.getElementById('videoArea').innerHTML = `
@@ -849,12 +862,47 @@ function pollJob(jobId, btn) {
       `;
     } else if (j.status === 'error') {
       clearInterval(pollTimer);
+      localStorage.removeItem(ACTIVE_JOB_KEY);
       btn.disabled = false;
       btn.textContent = '開始生成';
       document.getElementById('errorMsg').innerHTML = `<div class="msg error">生成失敗：${j.error || '未知錯誤'}</div>`;
     }
   }, 4000);
 }
+
+// On page (re)load, resume showing progress for whatever job was last
+// active - generation runs server-side and keeps going even if the
+// browser tab is closed, so a reload shouldn't lose the view of it.
+async function resumeActiveJob() {
+  const jobId = localStorage.getItem(ACTIVE_JOB_KEY);
+  if (!jobId) return;
+  const btn = document.getElementById('generateBtn');
+  try {
+    const res = await fetch(`${API}/api/jobs/${jobId}`);
+    if (!res.ok) { localStorage.removeItem(ACTIVE_JOB_KEY); return; }
+    const j = await res.json();
+    renderQueue(j.segments);
+    if (j.status === 'done') {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+      document.getElementById('videoArea').innerHTML = `
+        <video controls src="${API}/api/jobs/${jobId}/video"></video>
+        <div style="margin-top:10px"><a class="btn-download" href="${API}/api/jobs/${jobId}/video" download>下載完整影片</a></div>
+      `;
+    } else if (j.status === 'error') {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+      document.getElementById('errorMsg').innerHTML = `<div class="msg error">生成失敗：${j.error || '未知錯誤'}</div>`;
+    } else {
+      btn.disabled = true;
+      btn.textContent = '生成中...';
+      pollJob(jobId, btn);
+    }
+  } catch (e) {
+    // Backend unreachable right now - leave the stored job_id in place
+    // and just show nothing; the health-check poll will recover the UI
+    // once it's back, and the user can still reload again later.
+  }
+}
+resumeActiveJob();
 </script>
 </body>
 </html>
