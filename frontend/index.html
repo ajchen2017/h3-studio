@@ -218,13 +218,14 @@
         </div>
 
         <div class="field">
-          <div class="field-label"><span>影片長度（分鐘）</span></div>
           <div class="row">
-            <input type="number" id="durationMinutes" value="1" min="0.25" step="0.25" style="width:90px" />
-            <span class="field-label" style="margin:0">分段長度</span>
-            <input type="number" id="segmentLength" value="15" min="5" max="15" style="width:70px" />
-            <span class="hint">秒/段</span>
+            <span class="field-label" style="margin:0">影片長度（分鐘）:</span>
+            <input type="number" id="durationMinutes" value="0.25" min="0.25" step="0.25" style="width:90px" />
             <span class="hint mono" id="segmentCountHint" style="margin-left:auto"></span>
+          </div>
+          <div class="row">
+            <span class="field-label" style="margin:0">分段長度(秒/段):</span>
+            <input type="number" id="segmentLength" value="15" min="5" max="15" style="width:70px" />
           </div>
           <div class="row">
             <button class="btn-download" id="quick15sBtn" type="button">15秒單段測試</button>
