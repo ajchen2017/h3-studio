@@ -874,14 +874,37 @@ function pollJob(jobId, btn) {
 // active - generation runs server-side and keeps going even if the
 // browser tab is closed, so a reload shouldn't lose the view of it.
 async function resumeActiveJob() {
-  const jobId = localStorage.getItem(ACTIVE_JOB_KEY);
-  if (!jobId) return;
+  let jobId = localStorage.getItem(ACTIVE_JOB_KEY);
+  if (!jobId) {
+    // Nothing saved client-side (e.g. this job was submitted before this
+    // recovery feature existed, or localStorage got cleared) - ask the
+    // backend what it was last working on instead of showing a blank page.
+    try {
+      const res = await fetch(`${API}/api/jobs/latest`);
+      if (!res.ok) return;
+      const j = await res.json();
+      if (['done', 'error'].includes(j.status)) return;
+      jobId = j.job_id;
+    } catch (e) { return; }
+  }
   const btn = document.getElementById('generateBtn');
   try {
     const res = await fetch(`${API}/api/jobs/${jobId}`);
     if (!res.ok) { localStorage.removeItem(ACTIVE_JOB_KEY); return; }
     const j = await res.json();
     renderQueue(j.segments);
+
+    if (j.prompt) {
+      document.getElementById('prompt').value = j.prompt;
+    }
+    if (j.ref_image_filenames && j.ref_image_filenames.length) {
+      document.getElementById('refImagesPreview').innerHTML = j.ref_image_filenames.map((name, i) => `
+        <div class="ref-image-slot">
+          <img src="${API}/api/uploads/image/${encodeURIComponent(name)}" alt="人物${i + 1}" />
+          <span class="ref-image-tag">人物${i + 1}</span>
+        </div>`).join('') + `<div class="hint-note" style="width:100%;font-size:11px;color:var(--text-faint)">（上次送出時使用的參考圖，重新選檔會取代）</div>`;
+    }
+
     if (j.status === 'done') {
       localStorage.removeItem(ACTIVE_JOB_KEY);
       document.getElementById('videoArea').innerHTML = `

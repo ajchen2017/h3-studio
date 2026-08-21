@@ -488,10 +488,23 @@ async def generate(
         "output_fps": output_fps,
         "seed": seed,
     }
-    JOBS[job_id] = {"status": "queued", "segments": [], "params": params}
+    JOBS[job_id] = {"status": "queued", "segments": [], "params": params, "created_at": time.time()}
     _save_job_state(job_id)
     asyncio.get_event_loop().run_in_executor(None, _run_job, job_id, params)
     return {"job_id": job_id}
+
+
+@app.get("/api/jobs/latest")
+async def latest_job():
+    """Lets the frontend recover a job it lost track of (e.g. the browser
+    was closed before job_id got saved client-side, or localStorage was
+    cleared) - falls back to each job folder's mtime since older jobs
+    loaded from disk on startup may not carry an in-memory created_at."""
+    candidates = [jid for jid in JOBS if _job_state_path(jid).exists()]
+    if not candidates:
+        return JSONResponse({"error": "no jobs"}, status_code=404)
+    job_id = max(candidates, key=lambda jid: _job_state_path(jid).stat().st_mtime)
+    return {"job_id": job_id, "status": JOBS[job_id]["status"]}
 
 
 @app.get("/api/jobs/{job_id}")
@@ -499,12 +512,28 @@ async def job_status(job_id: str):
     job = JOBS.get(job_id)
     if not job:
         return JSONResponse({"error": "not found"}, status_code=404)
+    params = job.get("params", {})
     return {
         "status": job["status"],
         "segments": job["segments"],
         "error": job.get("error"),
         "has_final_video": "final_video" in job,
+        "prompt": params.get("prompt"),
+        "ref_image_filenames": params.get("ref_image_filenames") or [],
     }
+
+
+@app.get("/api/uploads/image/{filename}")
+async def get_uploaded_image(filename: str):
+    # Reference images live in ComfyUI's own input/ dir (that's what the
+    # workflow reads them from) - this just lets the frontend show a
+    # thumbnail of what was actually submitted, e.g. when recovering a
+    # job's progress after a reload. Names are our own uuid-based
+    # filenames (see _save_upload), never resolve outside that directory.
+    path = COMFYUI_INPUT_DIR / Path(filename).name
+    if not path.exists():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path)
 
 
 @app.get("/api/jobs/{job_id}/video")
