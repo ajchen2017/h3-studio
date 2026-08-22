@@ -98,6 +98,15 @@
   }
   #templateEditor { font-size: 12.5px; line-height: 1.6; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .track-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .track-row:last-child { border-bottom: none; }
+  .track-label { width: 110px; flex-shrink: 0; font-size: 12px; color: var(--text-dim); }
+  .track-body { flex: 1; min-height: 34px; background: var(--panel-raised); border: 1px solid var(--line);
+    border-radius: 5px; padding: 6px 10px; font-size: 11.5px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .track-clip { color: var(--text); font-family: "Consolas", monospace; }
+  .track-empty { color: var(--text-faint); }
+  .track-ops { display: flex; gap: 6px; flex-shrink: 0; }
+  .track-ops .btn-download { padding: 4px 10px; }
   .toggle-group { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
   .toggle-opt { padding: 7px 11px; font-family: "Consolas", monospace; font-size: 12px; color: var(--text-dim);
     cursor: pointer; border-right: 1px solid var(--line); background: var(--panel-raised); }
@@ -319,6 +328,7 @@
         <button class="tab-btn on" type="button" data-tab="content">專案內容</button>
         <button class="tab-btn" type="button" data-tab="prompt">Prompt 輸入</button>
         <button class="tab-btn" type="button" data-tab="generate">生成</button>
+        <button class="tab-btn" type="button" data-tab="postprod">後製</button>
       </div>
 
       <div class="tab-panel" data-tab-panel="content">
@@ -384,6 +394,81 @@
         <div class="field">
           <div class="field-label"><span>播放區</span><span class="hint" id="playbackLabel">尚未有影片</span></div>
           <div id="playbackArea"><div class="empty-state">生成完成後會顯示在這裡</div></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="postprod" style="display:none">
+        <div class="field">
+          <div class="field-label"><span>後製來源</span><span class="hint">可以用剛生成的影片，也可以直接上傳本機影片，兩者互不影響</span></div>
+          <div class="row">
+            <button class="btn-download" id="postprodUseGeneratedBtn" type="button">使用目前生成的影片</button>
+            <label class="btn-download" style="cursor:pointer">
+              上傳本機影片
+              <input type="file" id="postprodUploadInput" accept="video/*" style="display:none" />
+            </label>
+          </div>
+          <div class="hint-note" id="postprodSourceHint"></div>
+        </div>
+
+        <div class="field" id="postprodTimeline" style="display:none">
+          <div class="field-label"><span>編輯區</span><span class="hint">整段式操作：cut 剪下（存進剪貼簿）／delete 刪除／paste 貼上</span></div>
+
+          <div class="track-row" id="track1Row">
+            <div class="track-label">第 1 軌・影片</div>
+            <div class="track-body" id="track1Body"></div>
+            <div class="track-ops">
+              <button class="btn-download" data-track="1" data-op="cut" type="button">Cut</button>
+              <button class="btn-download" data-track="1" data-op="delete" type="button">Delete</button>
+              <button class="btn-download" data-track="1" data-op="paste" type="button">Paste</button>
+            </div>
+          </div>
+
+          <div class="track-row" id="track2Row">
+            <div class="track-label">第 2 軌・原始聲音</div>
+            <div class="track-body" id="track2Body"></div>
+            <div class="track-ops">
+              <button class="btn-download" data-track="2" data-op="cut" type="button">Cut</button>
+              <button class="btn-download" data-track="2" data-op="delete" type="button">Delete</button>
+              <button class="btn-download" data-track="2" data-op="paste" type="button">Paste</button>
+            </div>
+          </div>
+
+          <div class="track-row" id="track3Row">
+            <div class="track-label">第 3 軌・SFX</div>
+            <div class="track-body" id="track3Body"></div>
+            <div class="track-ops">
+              <button class="btn-download" data-track="3" data-op="cut" type="button">Cut</button>
+              <button class="btn-download" data-track="3" data-op="delete" type="button">Delete</button>
+              <button class="btn-download" data-track="3" data-op="paste" type="button">Paste</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field" id="postprodSfxPanel" style="display:none">
+          <div class="field-label"><span>音效後製（HunyuanVideo-Foley）</span><span class="hint" id="postprodSfxHint"></span></div>
+          <div class="hint-note">建議結構：<b>主體 + 動作 + 環境 + 聲音特質</b>，例如：深夜暴雨打在玻璃窗上的聲音，伴隨遠處隱約的雷聲，高保真，無雜音。中文會先翻譯成英文再送給模型（CLAP 文字編碼器僅以英文語料訓練）。</div>
+          <select id="postprodSfxTemplateSelect">
+            <option value="">結構化提示詞範例（選一個帶入，可再自行編輯）</option>
+          </select>
+          <textarea id="postprodSfxPrompt" placeholder="主體 + 動作 + 環境 + 聲音特質，例如：深夜暴雨打在玻璃窗上的聲音，伴隨遠處隱約的雷聲，高保真，無雜音" style="min-height:60px"></textarea>
+          <div class="row">
+            <button class="btn-download" id="postprodSfxTranslateBtn" type="button">翻譯成英文</button>
+            <button class="btn-download" id="postprodSfxGenerateBtn" type="button">生成音效</button>
+          </div>
+          <div id="postprodSfxPreview"></div>
+          <div class="row" id="postprodSfxGainRow" style="display:none">
+            <span class="hint" style="width:auto">SFX 音量</span>
+            <input type="range" id="postprodSfxGainSlider" min="-40" max="20" step="1" value="0" style="flex:1" />
+            <span class="hint" id="postprodSfxGainValue" style="width:auto">0 dB</span>
+          </div>
+        </div>
+
+        <div class="field" id="postprodMixPanel" style="display:none">
+          <div class="field-label"><span>合成</span><span class="hint" id="postprodMixHint"></span></div>
+          <div class="row">
+            <button class="btn-download" id="postprodMixBtn" type="button">Mix 合成</button>
+          </div>
+          <div id="postprodMixResult"></div>
         </div>
       </div>
 
@@ -1309,6 +1394,292 @@ function showCombinedVideo(jobId) {
     <div style="margin-top:10px"><a class="btn-download" href="${mediaUrl(API + '/api/jobs/' + jobId + '/video')}" download>下載完整影片</a></div>
   `;
 }
+
+// ---------- Post-production (3-track timeline: video / original audio /
+// SFX, via HunyuanVideo-Foley) - a standalone tool, not tied to having
+// just generated something. A postprod session is created lazily the
+// first time the user actually puts something on track 1. ----------
+let postprodSessionId = null;
+let postprodPollTimer = null;
+
+function fmtSec(s) {
+  if (s == null) return '--';
+  return `${s.toFixed(1)}s`;
+}
+
+async function ensurePostprodSession() {
+  if (postprodSessionId) return postprodSessionId;
+  const res = await authFetch(`${API}/api/postprod/sessions`, { method: 'POST' });
+  const body = await res.json();
+  postprodSessionId = body.session_id;
+  return postprodSessionId;
+}
+
+document.getElementById('postprodUseGeneratedBtn').addEventListener('click', async () => {
+  if (!currentJobId) { alert('目前沒有已生成的影片可用'); return; }
+  const sid = await ensurePostprodSession();
+  const fd = new FormData();
+  fd.append('job_id', currentJobId);
+  const res = await authFetch(`${API}/api/postprod/sessions/${sid}/track1/from-job`, { method: 'POST', body: fd });
+  const body = await res.json();
+  if (!res.ok) { alert(body.error || '載入失敗'); return; }
+  document.getElementById('postprodSourceHint').textContent = '第 1 軌已使用目前生成的影片';
+  refreshPostprodState();
+});
+
+document.getElementById('postprodUploadInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const sid = await ensurePostprodSession();
+  const fd = new FormData();
+  fd.append('file', file);
+  document.getElementById('postprodSourceHint').textContent = '上傳中...';
+  const res = await authFetch(`${API}/api/postprod/sessions/${sid}/track1/upload`, { method: 'POST', body: fd });
+  const body = await res.json();
+  if (!res.ok) { alert(body.error || '上傳失敗'); document.getElementById('postprodSourceHint').textContent = ''; return; }
+  document.getElementById('postprodSourceHint').textContent = `第 1 軌已使用上傳的影片：${escapeHtml(file.name)}`;
+  refreshPostprodState();
+  e.target.value = '';
+});
+
+async function refreshPostprodState() {
+  if (!postprodSessionId) return;
+  const res = await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}`);
+  if (!res.ok) return;
+  renderPostprodState(await res.json());
+}
+
+function renderPostprodState(s) {
+  const hasVideo = !!s.track1.file;
+  document.getElementById('postprodTimeline').style.display = hasVideo || s.track1.clipboard ? '' : 'none';
+  document.getElementById('postprodSfxPanel').style.display = hasVideo ? '' : 'none';
+  document.getElementById('postprodMixPanel').style.display = hasVideo ? '' : 'none';
+
+  // Track 1 - video
+  const t1 = s.track1;
+  document.getElementById('track1Body').innerHTML = t1.file
+    ? `<span class="track-clip">影片　in ${fmtSec(t1.in)} - out ${fmtSec(t1.out)}（總長 ${fmtSec(t1.duration)}）</span>
+       <input type="number" step="0.1" min="0" id="track1InInput" value="${t1.in}" style="width:70px" title="in（秒）" />
+       <input type="number" step="0.1" min="0" id="track1OutInput" value="${t1.out}" style="width:70px" title="out（秒）" />
+       <button class="btn-download" id="track1ApplyTrimBtn" type="button" style="padding:4px 10px">套用裁切</button>`
+    : `<span class="track-empty">${t1.clipboard ? '（空 - 剪貼簿有內容可貼上）' : '（空）'}</span>`;
+  const trimBtn = document.getElementById('track1ApplyTrimBtn');
+  if (trimBtn) trimBtn.addEventListener('click', () => trimTrack1());
+
+  // Track 2 - original audio (no file, just an include toggle)
+  const t2 = s.track2;
+  document.getElementById('track2Body').innerHTML = `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="track2IncludedCheckbox" ${t2.included ? 'checked' : ''} />
+      <span>${t2.included ? '包含在合成結果中' : '不包含（已排除）'}</span>
+    </label>`;
+  document.getElementById('track2IncludedCheckbox').addEventListener('change', (e) =>
+    trackAction(2, e.target.checked ? 'paste' : 'cut'));
+
+  // Track 3 - SFX
+  const t3 = s.track3;
+  document.getElementById('track3Body').innerHTML = t3.file
+    ? `<span class="track-clip">SFX　長度 ${fmtSec(t3.duration)}</span>
+       <span>offset</span>
+       <input type="number" step="0.1" min="0" id="track3OffsetInput" value="${t3.offset}" style="width:70px" />
+       <button class="btn-download" id="track3ApplyOffsetBtn" type="button" style="padding:4px 10px">套用位置</button>`
+    : `<span class="track-empty">${t3.clipboard ? '（空 - 剪貼簿有內容可貼上）' : '（尚未插入 SFX）'}</span>`;
+  const offsetBtn = document.getElementById('track3ApplyOffsetBtn');
+  if (offsetBtn) offsetBtn.addEventListener('click', () => setTrack3Offset());
+
+  const gainRow = document.getElementById('postprodSfxGainRow');
+  gainRow.style.display = t3.file ? '' : 'none';
+  if (t3.file) {
+    const gainDb = t3.gain_db || 0;
+    document.getElementById('postprodSfxGainSlider').value = gainDb;
+    document.getElementById('postprodSfxGainValue').textContent = `${gainDb} dB`;
+  }
+
+  document.querySelectorAll('#postprodTimeline [data-track]').forEach(btn => {
+    btn.onclick = () => trackAction(parseInt(btn.dataset.track), btn.dataset.op);
+  });
+
+  renderPostprodSfx(s.sfx_pending);
+
+  document.getElementById('postprodMixHint').textContent = s.mixed_video ? '已合成過一次，重新 Mix 會覆蓋' : '';
+  document.getElementById('postprodMixResult').innerHTML = s.mixed_video ? `
+    <video controls src="${mediaUrl(API + '/api/postprod/sessions/' + postprodSessionId + '/mixed')}"></video>
+    <div style="margin-top:8px"><a class="btn-download" href="${mediaUrl(API + '/api/postprod/sessions/' + postprodSessionId + '/mixed')}" download>下載合成後影片</a></div>
+  ` : '';
+}
+
+async function trimTrack1() {
+  const inSec = parseFloat(document.getElementById('track1InInput').value) || 0;
+  const outSec = parseFloat(document.getElementById('track1OutInput').value) || 0;
+  const fd = new FormData();
+  fd.append('in_sec', inSec);
+  fd.append('out_sec', outSec);
+  const res = await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}/track1/trim`, { method: 'POST', body: fd });
+  const body = await res.json();
+  if (!res.ok) { alert(body.error || '裁切失敗'); return; }
+  refreshPostprodState();
+}
+
+async function setTrack3Offset() {
+  const offsetSec = parseFloat(document.getElementById('track3OffsetInput').value) || 0;
+  const fd = new FormData();
+  fd.append('offset_sec', offsetSec);
+  await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}/track3/offset`, { method: 'POST', body: fd });
+  refreshPostprodState();
+}
+
+async function trackAction(trackNum, op) {
+  const res = await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}/track/${trackNum}/${op}`, { method: 'POST' });
+  const body = await res.json();
+  if (!res.ok) { alert(body.error || '操作失敗'); return; }
+  refreshPostprodState();
+}
+
+function renderPostprodSfx(sfx) {
+  const area = document.getElementById('postprodSfxPreview');
+  const hint = document.getElementById('postprodSfxHint');
+  if (!sfx) { area.innerHTML = ''; hint.textContent = ''; return; }
+
+  if (sfx.status === 'running' || sfx.status === 'queued') {
+    const elapsed = sfx.started_at ? Math.round(Date.now() / 1000 - sfx.started_at) : null;
+    hint.textContent = elapsed != null ? `生成中...（已 ${elapsed}s）` : '生成中...';
+    area.innerHTML = '';
+  } else if (sfx.status === 'error') {
+    hint.textContent = '';
+    area.innerHTML = `<div class="msg error">音效生成失敗：${escapeHtml(sfx.error || '未知錯誤')}</div>`;
+  } else if (sfx.status === 'done') {
+    hint.textContent = '';
+    area.innerHTML = `
+      <audio controls src="${mediaUrl(API + '/api/postprod/sessions/' + postprodSessionId + '/sfx/audio')}"></audio>
+      <div class="row" style="margin-top:8px">
+        <button class="btn-download" id="postprodSfxInsertBtn" type="button">插入第三軌</button>
+      </div>
+    `;
+    document.getElementById('postprodSfxInsertBtn').addEventListener('click', insertSfxToTrack3);
+  }
+}
+
+// Curated structured Foley prompt examples, in Chinese (主體+動作+環境+
+// 聲音特質) matching how users actually type - the SFX generate handler
+// auto-translates to English before sending, same as manual input. Not a
+// user-editable template library like the main video prompts, just quick
+// starting points to edit from.
+const SFX_PROMPT_EXAMPLES = [
+  { label: '暴雨・玻璃窗', text: '深夜暴雨打在玻璃窗上的聲音，伴隨遠處隱約的雷聲，高保真，無雜音' },
+  { label: '腳步聲・木地板', text: '赤腳走在木地板上的腳步聲，步伐緩慢平穩，近距離收音，帶有輕微室內迴音，高保真' },
+  { label: '開門・木門', text: '厚重木門緩緩推開發出的吱呀聲，停頓後輕輕關上發出悶響，音質清晰，無雜音' },
+  { label: '流水・溪流', text: '溪水緩緩流過石頭的潺潺聲，背景偶爾傳來鳥鳴，自然環境音，高保真' },
+  { label: '引擎・汽車', text: '汽車引擎發動、怠速運轉後緩緩駛離碎石路的聲音，質感寫實，無雜音' },
+  { label: '玻璃破碎', text: '玻璃杯摔落在硬地板上瞬間碎裂的聲音，尖銳短促，帶輕微回音，高保真' },
+  { label: '風聲・樹林', text: '強風吹過樹林讓樹葉持續沙沙作響，偶爾伴隨樹枝發出的輕微嘎吱聲，自然環境音' },
+  { label: '人聲・咖啡廳', text: '熱鬧咖啡廳裡人群模糊交談的環境音，夾雜杯盤碰撞與椅子摩擦地板的聲音，高保真' },
+];
+const sfxTemplateSelect = document.getElementById('postprodSfxTemplateSelect');
+SFX_PROMPT_EXAMPLES.forEach((ex, i) => {
+  const opt = document.createElement('option');
+  opt.value = String(i);
+  opt.textContent = ex.label;
+  sfxTemplateSelect.appendChild(opt);
+});
+sfxTemplateSelect.addEventListener('change', () => {
+  const idx = sfxTemplateSelect.value;
+  if (idx === '') return;
+  document.getElementById('postprodSfxPrompt').value = SFX_PROMPT_EXAMPLES[parseInt(idx)].text;
+  sfxTemplateSelect.value = '';
+});
+
+document.getElementById('postprodSfxTranslateBtn').addEventListener('click', async () => {
+  const el = document.getElementById('postprodSfxPrompt');
+  if (!el.value.trim()) return;
+  const btn = document.getElementById('postprodSfxTranslateBtn');
+  btn.disabled = true;
+  try {
+    el.value = await translateText(el.value, 'en');
+  } catch (e) {
+    alert('翻譯失敗：' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+const sfxGainSlider = document.getElementById('postprodSfxGainSlider');
+sfxGainSlider.addEventListener('input', () => {
+  document.getElementById('postprodSfxGainValue').textContent = `${sfxGainSlider.value} dB`;
+});
+sfxGainSlider.addEventListener('change', async () => {
+  const fd = new FormData();
+  fd.append('gain_db', sfxGainSlider.value);
+  await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}/track3/gain`, { method: 'POST', body: fd });
+});
+
+function pollPostprodSfx() {
+  if (postprodPollTimer) clearInterval(postprodPollTimer);
+  document.getElementById('postprodSfxHint').textContent = '生成中...';
+  postprodPollTimer = setInterval(async () => {
+    const res = await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}`);
+    if (!res.ok) { clearInterval(postprodPollTimer); return; }
+    const s = await res.json();
+    if (s.sfx_pending && (s.sfx_pending.status === 'done' || s.sfx_pending.status === 'error')) {
+      clearInterval(postprodPollTimer);
+    }
+    renderPostprodSfx(s.sfx_pending);
+  }, 3000);
+}
+
+document.getElementById('postprodSfxGenerateBtn').addEventListener('click', async () => {
+  let prompt = document.getElementById('postprodSfxPrompt').value.trim();
+  if (!prompt) { alert('請輸入音效描述'); return; }
+  const btn = document.getElementById('postprodSfxGenerateBtn');
+  btn.disabled = true;
+  try {
+    // HunyuanVideo-Foley's text encoder (CLAP) crashed ComfyUI's worker
+    // thread entirely on a Chinese prompt (2026-08-23 incident - CUDA
+    // "index out of bounds" inside the text-encoding step, needed a
+    // ComfyUI restart to recover). Auto-translate non-ASCII input the
+    // same way the other prompt fields in this app already do, so this
+    // can't silently repeat.
+    if (/[^\x00-\x7F]/.test(prompt)) {
+      document.getElementById('postprodSfxHint').textContent = '偵測到非英文，翻譯中...';
+      try {
+        prompt = await translateText(prompt, 'en');
+        document.getElementById('postprodSfxPrompt').value = prompt;
+      } catch (e) {
+        alert('翻譯失敗，請直接輸入英文描述再試一次');
+        return;
+      }
+    }
+    const fd = new FormData();
+    fd.append('prompt', prompt);
+    const res = await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}/sfx`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) { alert(body.error || '音效生成失敗'); return; }
+    pollPostprodSfx();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function insertSfxToTrack3() {
+  const res = await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}/sfx/insert`, { method: 'POST' });
+  const body = await res.json();
+  if (!res.ok) { alert(body.error || '插入失敗'); return; }
+  refreshPostprodState();
+}
+
+document.getElementById('postprodMixBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('postprodMixBtn');
+  btn.disabled = true;
+  btn.textContent = '合成中...';
+  try {
+    const res = await authFetch(`${API}/api/postprod/sessions/${postprodSessionId}/mix`, { method: 'POST' });
+    const body = await res.json();
+    if (!res.ok) { alert(body.error || '合成失敗'); return; }
+    refreshPostprodState();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Mix 合成';
+  }
+});
 function showSegmentVideo(jobId, index) {
   document.getElementById('playbackLabel').textContent = `第 ${index + 1} 段`;
   document.getElementById('playbackArea').innerHTML =

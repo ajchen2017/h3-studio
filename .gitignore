@@ -1,6 +1,7 @@
 backend/venv/
 backend/__pycache__/
 backend/jobs/
+backend/postprod_sessions/
 backend/uploads/
 backend/voice_profiles/
 backend/ref_images/

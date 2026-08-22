@@ -21,6 +21,7 @@ import auth
 import email_service
 from workflow_builder import build_workflow
 from comfy_client import queue_via_prompt_api, get_history, check_comfyui_alive
+import postprod
 
 
 def _load_dotenv():
@@ -66,6 +67,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(postprod.router)
 
 JOBS: dict[str, dict] = {}
 
@@ -721,6 +723,20 @@ async def job_video(job_id: str, user: dict = Depends(auth.get_admin_user_flexib
     if not job or "final_video" not in job:
         return JSONResponse({"error": "not ready"}, status_code=404)
     return FileResponse(job["final_video"], media_type="video/mp4")
+
+
+@app.post("/api/postprod/sessions/{sid}/track1/from-job")
+async def postprod_track1_from_job(sid: str, job_id: str = Form(...), user: dict = Depends(auth.get_admin_user)):
+    # Lives in main.py (not postprod.py) because it's the one place
+    # post-production needs to read a generation job's final video path -
+    # keeps the dependency one-way (main -> postprod, never the reverse).
+    job = JOBS.get(job_id)
+    if not job or "final_video" not in job:
+        return JSONResponse({"error": "該生成任務還沒有完成影片"}, status_code=400)
+    try:
+        return postprod.set_track1_from_file(sid, Path(job["final_video"]))
+    except ValueError:
+        return JSONResponse({"error": "postprod session not found"}, status_code=404)
 
 
 def _project_path(project_id: str) -> Path:
