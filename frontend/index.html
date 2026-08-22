@@ -471,18 +471,35 @@ document.getElementById('loginPasswordInput').addEventListener('keydown', (e) =>
   if (e.key === 'Enter') document.getElementById('loginSubmitBtn').click();
 });
 
-document.getElementById('forgotPasswordLink').addEventListener('click', async () => {
-  document.getElementById('loginMsg').innerHTML = '寄送中...';
+async function sendForgotPasswordRequest(attempt = 1) {
+  const maxAttempts = 3;
+  document.getElementById('loginMsg').innerHTML = attempt === 1 ? '寄送中...' : `寄送中...（重試第 ${attempt} 次）`;
   try {
     const res = await fetch(`${API}/api/auth/forgot-password`, { method: 'POST' });
-    const body = await res.json();
+    // This line's connection to the VPS is known to drop packets
+    // intermittently - a response that isn't valid JSON (empty body,
+    // truncated, or a proxy error page) usually just means this specific
+    // attempt got lost in transit, not that the request logically failed.
+    let body;
+    try {
+      body = await res.json();
+    } catch (parseErr) {
+      throw new Error('EMPTY_RESPONSE');
+    }
     document.getElementById('loginMsg').innerHTML = res.ok
       ? `<div class="hint-note">已寄出重設信到管理信箱，請查收（30 分鐘內有效）</div>`
       : `<div class="msg error">${body.error || '寄送失敗'}</div>`;
   } catch (e) {
-    document.getElementById('loginMsg').innerHTML = `<div class="msg error">連線失敗：${e.message}</div>`;
+    if (attempt < maxAttempts) {
+      await new Promise(r => setTimeout(r, 1500));
+      return sendForgotPasswordRequest(attempt + 1);
+    }
+    const reason = e.message === 'EMPTY_RESPONSE' ? '伺服器沒有正常回應（連線不穩）' : e.message;
+    document.getElementById('loginMsg').innerHTML =
+      `<div class="msg error">已重試 ${maxAttempts} 次仍失敗：${reason}。信可能還是有寄出，請先去信箱確認，或稍後再點一次「忘記密碼？」</div>`;
   }
-});
+}
+document.getElementById('forgotPasswordLink').addEventListener('click', () => sendForgotPasswordRequest());
 
 document.getElementById('resetSubmitBtn').addEventListener('click', async () => {
   const params = new URLSearchParams(location.search);
@@ -495,8 +512,20 @@ document.getElementById('resetSubmitBtn').addEventListener('click', async () => 
   const fd = new FormData();
   fd.append('token', token);
   fd.append('new_password', newPassword);
-  const res = await fetch(`${API}/api/auth/reset-password`, { method: 'POST', body: fd });
-  const body = await res.json();
+  let res, body;
+  try {
+    res = await fetch(`${API}/api/auth/reset-password`, { method: 'POST', body: fd });
+    body = await res.json();
+  } catch (e) {
+    // Unlike forgot-password, this call isn't safe to blindly retry - if it
+    // actually went through server-side but the response got lost on this
+    // flaky link, the token is now consumed and a retry would wrongly show
+    // "invalid link" even though the password WAS set. Tell the user how to
+    // tell the difference instead of guessing.
+    document.getElementById('resetMsg').innerHTML =
+      `<div class="msg error">連線不穩，無法確認密碼是否設定成功。請直接用剛才輸入的新密碼試著登入——能登入代表已經成功；不能登入的話，請重新申請一次「忘記密碼」。</div>`;
+    return;
+  }
   if (!res.ok) { document.getElementById('resetMsg').innerHTML = `<div class="msg error">${body.error || '設定失敗'}</div>`; return; }
   history.replaceState(null, '', location.pathname);
   document.getElementById('resetMsg').innerHTML = '<div class="hint-note">密碼已設定，請重新登入</div>';
