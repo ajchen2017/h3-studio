@@ -431,7 +431,14 @@ async function authFetch(url, options = {}) {
   if (res.status === 401) {
     authToken = '';
     localStorage.removeItem(AUTH_TOKEN_KEY);
-    showLoginOverlay(hadToken ? '登入已過期，請重新登入' : '');
+    // Don't clobber the "set new password" screen: a bunch of other init
+    // calls (checkComfyHealth, refreshProfileList, ...) fire at page load
+    // regardless of login state and all land here on a fresh visit - if
+    // the URL carries a reset_token, initAuthGate() already decided to
+    // show resetOverlay and that decision must win.
+    if (!new URLSearchParams(location.search).has('reset_token')) {
+      showLoginOverlay(hadToken ? '登入已過期，請重新登入' : '');
+    }
   }
   return res;
 }
