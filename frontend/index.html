@@ -937,7 +937,7 @@ async function refreshMicList() {
   sel.innerHTML = mics.map((d, i) => `<option value="${d.deviceId}">${d.label || `麥克風 ${i + 1}`}</option>`).join('');
 }
 document.getElementById('micRefreshBtn').addEventListener('click', refreshMicList);
-refreshMicList();
+authReady.then((ok) => { if (ok) refreshMicList(); });
 
 function formatSec(s) {
   const m = Math.floor(s / 60).toString().padStart(2, '0');
