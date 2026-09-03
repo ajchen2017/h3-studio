@@ -6,7 +6,7 @@
 <title>H3 Studio</title>
 <style>
   :root {
-    --bg: #14151A; --panel: #1B1D24; --panel-raised: #23262F; --line: #333644;
+    --bg: #14151A; --panel: #1B1D24; --panel-raised: #23262F; --line: #333644; --line-input: #565B70;
     --text: #EDEAE3; --text-dim: #93949E; --text-faint: #5E6069;
     --accent: #E8935A; --accent-strong: #F2A96F; --accent-soft: rgba(232,147,90,0.13);
     --success: #6FBF8B; --success-soft: rgba(111,191,139,0.14);
@@ -14,13 +14,25 @@
     --error: #E0665C; --error-soft: rgba(224,102,92,0.14);
   }
   * { box-sizing: border-box; }
+  /* App-wide baseline so every clickable button gives visible feedback,
+     even ones whose specific class doesn't define its own hover/active
+     (2026-08-25 - 儲存/另存新檔/複製/刪除 etc. had none at all). Classes
+     with their own richer states (.btn-download, .btn-generate,
+     .toggle-opt, .ref-image-remove) override this via higher specificity. */
+  button:not(:disabled) { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  button:not(:disabled):hover { filter: brightness(1.15); }
+  button:not(:disabled):active { filter: brightness(0.92); }
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font-family: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
     font-size: 14.5px; line-height: 1.55;
   }
   .mono { font-family: "Consolas", "Cascadia Mono", ui-monospace, monospace; }
-  .app { max-width: 1180px; margin: 0 auto; padding: 22px 24px 60px; }
+  .app { width: 100%; margin: 0; padding: 22px 24px 60px; }
   .header { display: flex; align-items: center; justify-content: space-between; gap: 16px;
     padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 24px; flex-wrap: wrap; }
   .brand-mark { font-family: "Consolas", monospace; font-weight: 600; font-size: 17px; }
@@ -41,7 +53,7 @@
   .stats-legend { display: inline-flex; flex-direction: column; gap: 1px; margin-left: 8px; font-size: 10px; line-height: 1.3; }
   .stats-legend span.gpu { color: #F2D94E; }
   .stats-legend span.cpu { color: var(--text); }
-  .split-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+  .split-layout { display: grid; grid-template-columns: 20% 80%; gap: 20px; align-items: start; }
   @media (max-width: 900px) { .split-layout { grid-template-columns: 1fr; } }
   .tab-bar { display: flex; gap: 2px; padding: 8px 8px 0; background: var(--panel-raised);
     border-bottom: 1px solid var(--line); flex-wrap: wrap; }
@@ -67,11 +79,21 @@
     text-transform: uppercase; color: var(--text-dim); }
   .panel-body { padding: 18px 16px 20px; display: flex; flex-direction: column; gap: 18px; }
   .field { display: flex; flex-direction: column; gap: 8px; }
+  .collapsible-header { cursor: pointer; user-select: none; }
+  .collapsible-header:hover { color: var(--text-dim); }
+  .collapsible-title-group { display: flex; align-items: baseline; gap: 10px; }
+  .collapsible-chevron { font-size: 10px; transition: transform 0.15s ease; flex-shrink: 0; }
+  .collapsible-body { display: flex; flex-direction: column; gap: 8px; }
+  .collapsible.collapsed .collapsible-chevron { transform: rotate(-90deg); }
+  .collapsible.collapsed .collapsible-body { display: none; }
   .field-label { display: flex; align-items: baseline; justify-content: space-between; font-family: "Consolas", monospace;
     font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); }
   .field-label .hint { font-family: inherit; text-transform: none; letter-spacing: 0; color: var(--text-faint); font-size: 11.5px; }
+  .title-bold { color: var(--text); font-weight: 700; }
+  .title-highlight { color: var(--accent-strong); font-weight: 700; font-size: 13px; }
+  .hint-note { font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
   textarea, input[type=text], input[type=number] {
-    width: 100%; background: var(--panel-raised); border: 1px solid var(--line); border-radius: 5px;
+    width: 100%; background: var(--panel-raised); border: 1px solid var(--line-input); border-radius: 5px;
     color: var(--text); font-family: inherit; font-size: 13.5px; padding: 9px 10px;
   }
   textarea { min-height: 110px; resize: vertical; }
@@ -86,6 +108,9 @@
     position: absolute; left: 4px; bottom: 4px; font-family: "Consolas", monospace; font-size: 9.5px;
     color: #F0EEE8; background: rgba(0,0,0,0.6); padding: 2px 5px; border-radius: 3px;
   }
+  .ref-image-item { display: flex; flex-direction: column; gap: 2px; width: 72px; }
+  .ref-image-item select, .ref-image-item input { width: 72px; font-size: 9.5px; padding: 2px 3px;
+    border-radius: 3px; border: 1px solid var(--line-input); background: var(--panel); color: var(--text); }
   .ref-image-remove {
     position: absolute; top: 3px; right: 3px; width: 17px; height: 17px; border-radius: 50%;
     border: none; background: rgba(0,0,0,0.6); color: #F0EEE8; font-size: 11px; line-height: 1;
@@ -93,11 +118,14 @@
   }
   .ref-image-remove:hover { background: var(--error); }
   select {
-    width: 100%; background: var(--panel-raised); border: 1px solid var(--line); border-radius: 5px;
+    width: 100%; background: var(--panel-raised); border: 1px solid var(--line-input); border-radius: 5px;
     color: var(--text); font-family: inherit; font-size: 12.5px; padding: 8px 10px;
   }
   #templateEditor { font-size: 12.5px; line-height: 1.6; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ref-card { flex: 1; min-width: 200px; background: var(--panel-raised); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ref-card-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
   .track-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
   .track-row:last-child { border-bottom: none; }
   .track-label { width: 110px; flex-shrink: 0; font-size: 12px; color: var(--text-dim); }
@@ -109,9 +137,11 @@
   .track-ops .btn-download { padding: 4px 10px; }
   .toggle-group { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
   .toggle-opt { padding: 7px 11px; font-family: "Consolas", monospace; font-size: 12px; color: var(--text-dim);
-    cursor: pointer; border-right: 1px solid var(--line); background: var(--panel-raised); }
+    cursor: pointer; border-right: 1px solid var(--line); background: var(--panel-raised); transition: background-color .12s, color .12s; }
   .toggle-opt:last-child { border-right: none; }
+  .toggle-opt:hover:not(.on) { background: var(--panel); color: var(--text); }
   .toggle-opt.on { background: var(--accent-soft); color: var(--accent-strong); }
+  .toggle-opt.on:hover { background: var(--accent-soft); }
   .check-row { display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px; background: var(--panel-raised);
     border: 1px solid var(--line); border-radius: 5px; }
   .check-row .check-title { font-size: 12.5px; }
@@ -119,8 +149,10 @@
   .btn-generate { display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--accent);
     color: #1A120A; border: none; border-radius: 5px; padding: 12px 18px; font-family: "Consolas", monospace;
     font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-generate { transition: background-color .12s; }
   .btn-generate:hover { background: var(--accent-strong); }
-  .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-generate:active { transform: translateY(1px); }
+  .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
   .est-line { text-align: center; font-size: 11.5px; color: var(--text-faint); }
   .queue { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line);
     border-radius: 5px; overflow: hidden; }
@@ -129,14 +161,43 @@
   .seg-time { font-family: "Consolas", monospace; font-size: 11.5px; color: var(--text-faint); }
   .seg-card { background: var(--panel-raised); border: 1px solid var(--line); border-radius: 6px;
     padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
-  .seg-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .seg-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; overflow-x: auto; }
+  .seg-card-head select.ins-template-insert { width: auto; flex-shrink: 0; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--line-input);
+    background: var(--panel); color: var(--text); }
+  .seg-card-head .btn-download { flex-shrink: 0; }
   .seg-card-index { font-family: "Consolas", monospace; font-size: 12.5px; font-weight: 700; color: var(--accent-strong); }
-  .seg-card-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; align-items: start; }
-  .seg-card-fields textarea { min-height: 90px; font-size: 12.5px; }
+  .seg-insert-bar { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; overflow-x: auto; }
+  .seg-insert-bar select { width: auto; flex-shrink: 0; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--line-input);
+    background: var(--panel); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seg-insert-bar .ins-camera { max-width: 150px; }
+  .seg-insert-bar .ins-subject { max-width: 100px; }
+  .seg-insert-bar .ins-speaker { max-width: 90px; }
+  .seg-insert-bar button { flex-shrink: 0; }
+  .seg-card-fields { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; align-items: start; }
+  .seg-card-fields textarea { min-height: 140px; font-size: 12.5px; }
   .seg-card-fields input[type=text] { font-size: 12.5px; }
   .seg-card video { width: 100%; border-radius: 5px; border: 1px solid var(--line); background: #000; margin-top: 4px; }
+  .seg-gen-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .seg-gen-row [data-seg-generate] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-strong); font-weight: 600; }
+  .seg-gen-row [data-seg-generate]:hover { background: var(--accent-soft); }
+  .seg-gen-row [data-seg-stop] { background: var(--error-soft); border-color: var(--error); color: var(--error); }
+  .seg-video-slot { width: 100%; aspect-ratio: 16/9; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 5px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+  .seg-video-slot.has-video { cursor: zoom-in; }
+  .seg-video-slot video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+  .seg-video-slot .hint { font-size: 11px; text-align: center; padding: 8px; }
+  .gen-result-row { display: flex; gap: 10px; align-items: stretch; }
+  .gen-result-row textarea { flex: 1; min-height: 110px; font-size: 12px; font-family: "Consolas", monospace;
+    background: var(--panel); color: var(--text-faint); resize: vertical; }
+  .gen-result-play { width: 110px; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center; text-align: center; }
+  .gen-result-play button { width: 100%; justify-content: center; }
+  @media (max-width: 640px) {
+    .gen-result-row { flex-direction: column; }
+    .gen-result-play { width: auto; }
+  }
   @media (max-width: 640px) {
     .seg-card-fields { grid-template-columns: 1fr; }
+    .seg-video-slot { aspect-ratio: auto; height: 120px; }
   }
   .pill { display: inline-flex; align-items: center; gap: 5px; font-family: "Consolas", monospace; font-size: 10.5px;
     padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
@@ -144,10 +205,17 @@
   .pill.running { background: var(--accent-soft); color: var(--accent-strong); }
   .pill.pending { background: var(--panel-raised); color: var(--text-faint); border: 1px solid var(--line); }
   .pill.error { background: var(--error-soft); color: var(--error); }
+  .pill.cancelled { background: var(--panel-raised); color: var(--text-faint); border: 1px solid var(--line); }
+  .pill.segments-ready { background: var(--warning-soft); color: var(--warning); }
+  .pill.queued { background: var(--warning-soft); color: var(--warning); }
   video { width: 100%; border-radius: 6px; border: 1px solid var(--line); background: #000; }
-  .btn-download { display: inline-flex; align-items: center; gap: 7px; background: transparent; border: 1px solid var(--line);
+  .btn-download { display: inline-flex; align-items: center; gap: 7px; background: var(--panel-raised); border: 1px solid var(--line-input);
     color: var(--text); border-radius: 5px; padding: 7px 12px; font-family: "Consolas", monospace; font-size: 12px;
-    cursor: pointer; text-decoration: none; }
+    cursor: pointer; text-decoration: none; transition: background-color .12s, border-color .12s, color .12s; }
+  .btn-download:hover { background: var(--panel); border-color: var(--accent); color: var(--accent-strong); }
+  .btn-download:active { background: var(--accent-soft); transform: translateY(1px); }
+  .btn-download:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-download:disabled:hover { background: transparent; border-color: var(--line); color: var(--text); }
   .msg { font-size: 12.5px; padding: 8px 10px; border-radius: 5px; }
   .msg.error { background: var(--error-soft); color: var(--error); }
   .empty-state { color: var(--text-faint); font-size: 12.5px; padding: 20px; text-align: center; }
@@ -156,17 +224,35 @@
   .auth-card { width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--line);
     border-radius: 8px; padding: 28px 24px; }
   .auth-card input { margin-bottom: 0; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900;
+    display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .modal-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    max-width: 760px; width: 100%; max-height: 82vh; display: flex; flex-direction: column;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45); }
+  .modal-header { display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--line); font-weight: 600; flex-shrink: 0; }
+  .modal-close-btn { background: transparent; border: none; color: var(--text-dim);
+    font-size: 16px; line-height: 1; padding: 4px 8px; border-radius: 4px; }
+  .modal-close-btn:hover { color: var(--text); background: var(--panel-raised); }
+  .modal-body { padding: 16px 18px; overflow-y: auto; }
+  .review-en-text.kw-box { white-space: pre-wrap; font-size: 11.5px; line-height: 1.65;
+    background: var(--panel-raised); border: 1px solid var(--line); border-radius: 5px; padding: 10px; }
+  .review-en-text.kw-box:focus { outline: 1px solid var(--accent); }
+  .kw { color: var(--accent-strong); font-weight: 700; }
 </style>
 </head>
 <body>
 <div class="app">
   <div class="header">
-    <div><span class="brand-mark">H3<span class="accent-dot">·</span>STUDIO</span><span class="brand-sub">本機影音生成控制台</span></div>
+    <div>
+      <div><span class="brand-mark">H3<span class="accent-dot">·</span>STUDIO</span><span class="brand-sub">本機影音生成控制台</span></div>
+      <div class="brand-sub mono" id="modelNameLine" style="margin-left:0;margin-top:2px"></div>
+    </div>
     <div class="status-chips">
-      <span class="chip" id="comfyStatusChip"><span class="chip-dot" id="comfyStatusDot"></span><span id="comfyStatusText">ComfyUI 檢查中...</span></span>
+      <button class="chip" id="comfyStatusChip" type="button" title="未連線時點擊重新檢查"><span class="chip-dot" id="comfyStatusDot"></span><span id="comfyStatusText">ComfyUI 檢查中...</span></button>
       <span class="chip"><span class="chip-dot"></span>RTX 5060 Ti · 16GB</span>
       <span class="chip"><span class="chip-dot"></span>Ref2VA + Turbo LoRA</span>
-      <span class="chip" title="實測比不裝慢，暫停用"><span class="chip-dot" style="background:var(--text-faint);box-shadow:none"></span>SageAttention 已停用（實測較慢）</span>
+      <span class="chip" id="sageAttentionChip" title="實測比不裝慢；設定分頁可切換，需要重啟 ComfyUI 才生效"><span class="chip-dot" id="sageAttentionChipDot" style="background:var(--text-faint);box-shadow:none"></span><span id="sageAttentionChipText">SageAttention 已停用</span></span>
       <span class="chip stats-chip" id="statsChip" title="GPU / CPU 即時使用率">
         <canvas id="statsCanvas" width="150" height="30"></canvas>
         <span class="stats-legend">
@@ -205,106 +291,99 @@
     <div class="panel left-col">
       <div class="tab-bar" data-tab-group="left">
         <button class="tab-btn on" type="button" data-tab="project">專案</button>
-        <button class="tab-btn" type="button" data-tab="settings">設定</button>
+        <button class="tab-btn" type="button" data-tab="settings">系統設定</button>
       </div>
 
       <div class="tab-panel" data-tab-panel="project">
         <div class="field">
           <div class="field-label"><span>專案</span></div>
-          <div class="row">
-            <select id="projectSelect" style="flex:1"><option value="">（未載入專案）</option></select>
-            <button class="btn-download" id="projectLoadBtn" type="button">載入</button>
-          </div>
-          <div class="row">
-            <input type="text" id="projectNameInput" placeholder="專案名稱" style="flex:1" />
-            <button class="btn-download" id="projectNewBtn" type="button">新增</button>
+          <select id="projectSelect"><option value="">（未載入專案）</option></select>
+          <div class="hint-note" id="projectStatusLine">尚未載入專案</div>
+          <input type="text" id="projectNameInput" placeholder="專案名稱" style="margin-top:6px" />
+          <div class="row" style="margin-top:6px">
             <button class="btn-download" id="projectSaveBtn" type="button">儲存</button>
-          </div>
-          <div class="row">
+            <button class="btn-download" id="projectSaveAsBtn" type="button">另存新檔</button>
             <button class="btn-download" id="projectCloneBtn" type="button">複製</button>
             <button class="btn-download" id="projectDeleteBtn" type="button">刪除</button>
+            <button class="btn-download" id="projectNewBtn" type="button">＋新專案</button>
           </div>
-        </div>
-        <div class="field">
-          <div class="field-label"><span>生成紀錄</span></div>
-          <div class="queue" id="jobHistoryList"><div class="empty-state">尚無生成紀錄</div></div>
         </div>
       </div>
 
       <div class="tab-panel" data-tab-panel="settings" style="display:none">
-        <div class="field">
-          <div class="field-label"><span>參考語音（單一聲音）</span></div>
-          <input type="file" id="refAudio" accept="audio/*" />
-          <div class="hint-note">或用下方「語音 Profile」現場錄一段、選一個已存的聲音</div>
-        </div>
-
-        <div class="field">
-          <div class="field-label"><span>語音 Profile 錄製</span></div>
-          <div class="row">
-            <select id="micSelect" style="flex:1"></select>
-            <button class="btn-download" id="micRefreshBtn" type="button">重新整理裝置</button>
+        <div class="field collapsible collapsed" id="voiceRecordCard">
+          <div class="field-label collapsible-header">
+            <span class="collapsible-title-group"><span class="title-bold">語音 Profile 錄製</span></span>
+            <span class="collapsible-chevron">▼</span>
           </div>
-          <div class="field-label" style="margin-top:4px"><span>照著念（約20秒或更短）</span></div>
-          <textarea id="recordScript" style="min-height:70px">大家好，我叫小明，今天天氣很好，我想出去走走看看。東西南北、春夏秋冬，一二三四五六七八九十。謝謝大家聽我做這段聲音測試。</textarea>
-          <div class="row">
-            <button class="btn-generate" id="recordBtn" type="button" style="flex:none; padding:9px 16px">● 開始錄音</button>
-            <span class="mono" id="recordTimer">00:00 / 00:20</span>
-            <span class="hint" id="recordStatus"></span>
-          </div>
-          <div id="recordPreviewArea"></div>
-          <div class="row" id="saveProfileRow" style="display:none">
-            <input type="text" id="profileNameInput" placeholder="Profile 名稱" style="flex:1" />
-            <button class="btn-download" id="saveProfileBtn" type="button">存成 Profile</button>
-          </div>
-        </div>
-
-        <div class="field">
-          <div class="field-label"><span>已存語音 Profile</span><span class="hint" id="selectedProfileHint"></span></div>
-          <div class="queue" id="profileList"><div class="empty-state">尚無 Profile</div></div>
-        </div>
-
-        <div class="field">
-          <div class="field-label"><span>參考圖片庫（人物照）</span></div>
-          <div class="row">
-            <input type="file" id="refLibFile" accept="image/*" style="flex:1" />
-            <input type="text" id="refLibNameInput" placeholder="人物名稱" style="flex:1" />
-            <button class="btn-download" id="refLibSaveBtn" type="button">存入圖庫</button>
-          </div>
-          <div class="hint-note">存過的人物照會出現在右邊「專案內容」分頁，用檔名直接調用，不用每次重新上傳</div>
-          <div class="ref-image-grid" id="refLibraryList" style="margin-top:6px"></div>
-        </div>
-
-        <div class="field">
-          <div class="field-label"><span>背景音樂（已驗證有效）</span></div>
-          <input type="file" id="bgMusic" accept="audio/*" />
-          <div class="hint-note" style="font-size:11px;color:var(--text-faint);margin-top:2px">
-            會自動裁切成分段長度，接到獨立的 ref_audio_1 插槽（跟人聲分開）。已實測生成結果確實抓到參考旋律的味道——
-            建議在 prompt 的 non_diegetic_music 段落明確描述，例如「the score follows the mood and rhythm of the reference track」，效果更穩定。
+          <div class="collapsible-body">
+            <div class="row">
+              <select id="micSelect" style="flex:1"></select>
+              <button class="btn-download" id="micRefreshBtn" type="button">重新整理裝置</button>
+            </div>
+            <div class="field-label" style="margin-top:4px"><span>照著念（約20秒或更短）</span></div>
+            <textarea id="recordScript" style="min-height:70px">大家好，我叫小明，今天天氣很好，我想出去走走看看。東西南北、春夏秋冬，一二三四五六七八九十。謝謝大家聽我做這段聲音測試。</textarea>
+            <div class="row">
+              <button class="btn-generate" id="recordBtn" type="button" style="flex:none; padding:9px 16px">● 開始錄音</button>
+              <span class="mono" id="recordTimer">00:00 / 00:20</span>
+              <span class="hint" id="recordStatus"></span>
+            </div>
+            <div id="recordPreviewArea"></div>
+            <div class="row" id="saveProfileRow" style="display:none">
+              <input type="text" id="profileNameInput" placeholder="Profile 名稱" style="flex:1" />
+              <button class="btn-download" id="saveProfileBtn" type="button">存成 Profile</button>
+            </div>
           </div>
         </div>
 
-        <div class="field">
-          <div class="field-label"><span>密碼管理</span></div>
-          <input type="password" id="changeCurrentPassword" placeholder="目前密碼" autocomplete="current-password" />
-          <input type="password" id="changeNewPassword" placeholder="新密碼（至少 6 碼）" autocomplete="new-password" style="margin-top:6px" />
-          <button class="btn-download" id="changePasswordBtn" type="button" style="margin-top:6px">變更密碼</button>
-          <div id="changePasswordMsg" style="margin-top:6px"></div>
+        <div class="field collapsible collapsed" id="savedProfilesCard">
+          <div class="field-label collapsible-header">
+            <span class="collapsible-title-group"><span class="title-bold">已存語音 Profile</span></span>
+            <span class="hint" id="selectedProfileHint"></span>
+            <span class="collapsible-chevron">▼</span>
+          </div>
+          <div class="collapsible-body">
+            <div class="queue" id="profileList"><div class="empty-state">尚無 Profile</div></div>
+          </div>
         </div>
 
-        <div class="field">
-          <div class="field-label"><span>參考影片（延伸現有影片用，可留空）</span></div>
-          <input type="file" id="refVideo" accept="video/*" />
-          <div class="check-row">
-            <input type="checkbox" id="useRefVideoDirect" />
-            <label for="useRefVideoDirect" style="display:flex;flex-direction:column;gap:3px;cursor:pointer">
-              <span class="check-title">啟用參考影片直接分析（實驗性）</span>
-              <span class="check-desc">預設關閉時改用「影片最後一幀擷取成參考圖片」，這是已驗證有效的做法</span>
-            </label>
+        <div class="field collapsible collapsed" id="characterPhotoCard">
+          <div class="field-label collapsible-header">
+            <span class="collapsible-title-group"><span class="title-bold" title="從文字抓角色，AI 生成照片存進圖庫">🧑 AI生成人物照</span></span>
+            <span class="collapsible-chevron">▼</span>
+          </div>
+          <div class="collapsible-body">
+            <textarea id="extractCharactersInput" rows="5" placeholder="描述故事內容，AI 會從這段文字抓出人物"></textarea>
+            <div class="row">
+              <button class="btn-download" id="extractCharactersBtn" type="button">分析人物</button>
+              <span class="hint" id="extractCharactersMsg" style="margin-left:auto"></span>
+            </div>
+            <div id="characterList"></div>
+            <div class="hint-note">會用上面這個文字框的內容去抓人物；生成的照片會自動存進下方「參考圖片庫」，之後在「參考圖片」區選取就會變成 &lt;Subject N&gt;，模型才會真的鎖臉</div>
+          </div>
+        </div>
+
+        <div class="field collapsible collapsed" id="refLibraryCard">
+          <div class="field-label collapsible-header">
+            <span class="collapsible-title-group"><span class="title-bold">參考圖片庫（人物照）</span></span>
+            <span class="collapsible-chevron">▼</span>
+          </div>
+          <div class="collapsible-body">
+            <div class="row">
+              <input type="file" id="refLibFile" accept="image/*" style="flex:1" />
+              <input type="text" id="refLibNameInput" placeholder="人物名稱" style="flex:1" />
+              <button class="btn-download" id="refLibRemoveBgBtn" type="button">去背景（白底）</button>
+              <button class="btn-download" id="refLibSaveBtn" type="button">存入圖庫</button>
+            </div>
+            <div class="hint-note" id="refLibRemoveBgMsg"></div>
+            <div id="refLibRemoveBgPreview" class="ref-image-slot" style="display:none;width:96px;height:96px"></div>
+            <div class="hint-note">存過的人物照會出現在右邊「專案內容」分頁，用檔名直接調用，不用每次重新上傳</div>
+            <div class="ref-image-grid" id="refLibraryList" style="margin-top:6px"></div>
           </div>
         </div>
 
         <div class="field">
-          <div class="field-label"><span>輸出格式</span></div>
+          <div class="field-label"><span class="title-bold">輸出格式</span></div>
           <div class="row">
             <span class="hint">解析度</span>
             <div class="toggle-group" id="resToggle">
@@ -319,13 +398,51 @@
               <div class="toggle-opt" data-fps="30">30fps</div>
             </div>
           </div>
+          <div class="row">
+            <span class="hint" title="turbo LoRA 的取樣步數。8 步是官方預設、最穩定；4 步約快 40%，實測正臉/對話鏡頭沒問題，但手部動作/複雜背景場景會出現變形，目前只測過現有這顆 turbo LoRA，其他加速 LoRA 未列入">生成步數</span>
+            <div class="toggle-group" id="stepsToggle">
+              <div class="toggle-opt on" data-steps="8">8 步（穩定，官方預設）</div>
+              <div class="toggle-opt" data-steps="4">4 步（快 40%，正臉場景已驗證）</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span class="title-bold">效能</span></div>
+          <div class="check-row">
+            <input type="checkbox" id="sageAttentionToggle" />
+            <label for="sageAttentionToggle" style="display:flex;flex-direction:column;gap:3px;cursor:pointer">
+              <span class="check-title">啟用 SageAttention</span>
+              <span class="check-desc">實測比不裝慢，目前預設關閉；改變設定後要重啟 ComfyUI 才會生效——不會自動重啟，避免中斷正在跑的生成，記得自己找時間手動重啟</span>
+            </label>
+          </div>
+          <div id="sageAttentionMsg" style="margin-top:6px"></div>
+        </div>
+
+        <div class="field">
+          <div class="field-label"><span class="title-bold">密碼管理</span></div>
+          <input type="password" id="changeCurrentPassword" placeholder="目前密碼" autocomplete="current-password" />
+          <input type="password" id="changeNewPassword" placeholder="新密碼（至少 6 碼）" autocomplete="new-password" style="margin-top:6px" />
+          <button class="btn-download" id="changePasswordBtn" type="button" style="margin-top:6px">變更密碼</button>
+          <div id="changePasswordMsg" style="margin-top:6px"></div>
+        </div>
+
+        <div class="field collapsible collapsed" id="modelReferenceCard">
+          <div class="field-label collapsible-header">
+            <span class="collapsible-title-group"><span class="title-bold">目前系統模型參照列表</span></span>
+            <span class="collapsible-chevron">▼</span>
+          </div>
+          <div class="collapsible-body">
+            <div class="hint-note">直接讀 ComfyUI workflow 設定檔，不會跟實際跑的模型脫鉤</div>
+            <div id="modelReferenceTable" class="hint-note mono" style="line-height:2"></div>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="panel right-col">
       <div class="tab-bar" data-tab-group="right">
-        <button class="tab-btn on" type="button" data-tab="content">專案內容</button>
+        <button class="tab-btn on" type="button" data-tab="content">專案人物與聲音設定</button>
         <button class="tab-btn" type="button" data-tab="prompt">Prompt 輸入</button>
         <button class="tab-btn" type="button" data-tab="generate">生成</button>
         <button class="tab-btn" type="button" data-tab="postprod">後製</button>
@@ -333,12 +450,40 @@
 
       <div class="tab-panel" data-tab-panel="content">
         <div class="field">
-          <div class="field-label"><span>參考圖片（可多人，最多 3 張）</span></div>
-          <input type="file" id="refImages" accept="image/*" multiple />
-          <div id="refImagesPreview" class="ref-image-grid" style="margin-top:6px"></div>
-          <div class="hint-note" style="margin-top:6px">從圖庫選用（在左邊「設定」分頁存過的人物照）</div>
-          <select id="refLibrarySelect"><option value="">（選擇圖庫人物）</option></select>
-          <div class="ref-image-grid" id="refLibrarySelectedPreview" style="margin-top:6px"></div>
+          <div class="field-label"><span>角色與延續參考</span><span class="hint">人物 / 聲音 / 延伸影片，皆可留空，留空由系統自行處理（段落間仍會自動接續畫面）</span></div>
+          <div class="row" style="align-items:stretch">
+            <div class="ref-card">
+              <div class="ref-card-title">參考圖片（最多 3 人）</div>
+              <div class="hint-note">從圖庫選（在左邊「設定」分頁上傳、存成人物照），Ctrl/Cmd+點 可複選</div>
+              <select id="refLibrarySelect" multiple size="4"></select>
+              <div class="ref-image-grid" id="refLibrarySelectedPreview"></div>
+              <div id="refImagesPreview" class="ref-image-grid" style="display:none"></div>
+            </div>
+            <div class="ref-card">
+              <div class="ref-card-title">參考語音（單一聲音）<span class="hint" id="refAudioHint"></span></div>
+              <div class="hint-note">從圖庫選用（在左邊「設定」分頁錄音、存成 Profile）</div>
+              <select id="voiceProfileSelect"><option value="">（選擇語音 Profile）</option></select>
+              <div class="hint-note" style="margin-top:6px">或直接上傳單次使用的音檔</div>
+              <input type="file" id="refAudio" accept="audio/*" />
+            </div>
+            <div class="ref-card">
+              <div class="ref-card-title">參考影片（延伸現有影片用，可留空）<span class="hint" id="refVideoHint"></span></div>
+              <input type="file" id="refVideo" accept="video/*" />
+              <div class="check-row">
+                <input type="checkbox" id="useRefVideoDirect" />
+                <label for="useRefVideoDirect" style="display:flex;flex-direction:column;gap:3px;cursor:pointer">
+                  <span class="check-title">啟用參考影片直接分析（實驗性）</span>
+                  <span class="check-desc">預設關閉時改用「影片最後一幀擷取成參考圖片」，這是已驗證有效的做法</span>
+                </label>
+              </div>
+            </div>
+            <div class="ref-card">
+              <div class="ref-card-title">背景音樂<span class="hint" id="bgMusicHint"></span></div>
+              <div class="hint-note">參考音檔（已驗證有效，會自動裁切成分段長度，接到獨立的 ref_audio_1 插槽，跟人聲分開）</div>
+              <input type="file" id="bgMusic" accept="audio/*" />
+              <div class="hint-note" style="margin-top:6px">文字描述配樂調性（non_diegetic_music 文字內容在「Prompt 輸入」分頁）</div>
+            </div>
+          </div>
         </div>
 
         <div class="field">
@@ -357,43 +502,117 @@
           </div>
         </div>
 
-        <div class="field">
-          <div class="field-label"><span>共用設定（每段都會套用）</span>
-            <span class="hint" id="translateSharedEn" style="cursor:pointer;text-decoration:underline">中→英</span>
-            <span class="hint" id="translateSharedZh" style="cursor:pointer;text-decoration:underline">英→中</span>
-          </div>
-          <textarea id="subjectDefinitions" style="min-height:60px" placeholder="&lt;Subject 1&gt; = &lt;Picture 1&gt;, the character (identity fully_preserved)"></textarea>
-          <input type="text" id="summaryInput" placeholder="summary：整部影片一句話描述" style="margin-top:6px" />
-          <input type="text" id="musicInput" value="N/A" placeholder="non_diegetic_music" style="margin-top:6px" />
-        </div>
       </div>
 
       <div class="tab-panel" data-tab-panel="prompt" style="display:none">
-        <div class="field">
-          <div class="field-label"><span>Prompt 範本庫</span><span class="hint">1人 / 2人 / 3人 / 多人</span></div>
-          <div class="toggle-group" id="templateCategoryToggle">
-            <div class="toggle-opt on" data-cat="1">1人</div>
-            <div class="toggle-opt" data-cat="2">2人</div>
-            <div class="toggle-opt" data-cat="3">3人</div>
-            <div class="toggle-opt" data-cat="multi">多人</div>
+        <div class="field collapsible collapsed" id="templateLibraryCard">
+          <div class="field-label collapsible-header">
+            <span class="collapsible-title-group"><span>Prompt 範本庫</span><span class="hint">1人 / 2人 / 3人 / 多人</span></span>
+            <span class="collapsible-chevron">▼</span>
           </div>
-          <select id="templateSelect"></select>
-          <textarea id="templateEditor" placeholder="範本內容..." style="min-height:120px"></textarea>
-          <div class="row">
-            <button class="btn-download" id="templateApplyBtn" type="button">套用到目前選取的段落 ↓</button>
-            <button class="btn-download" id="templateSaveBtn" type="button">另存新範本</button>
-            <button class="btn-download" id="templateDeleteBtn" type="button">刪除此範本</button>
+          <div class="collapsible-body">
+            <div class="toggle-group" id="templateCategoryToggle">
+              <div class="toggle-opt on" data-cat="1">1人</div>
+              <div class="toggle-opt" data-cat="2">2人</div>
+              <div class="toggle-opt" data-cat="3">3人</div>
+              <div class="toggle-opt" data-cat="multi">多人</div>
+            </div>
+            <select id="templateSelect" style="display:none"></select>
+            <div id="templateSelectLabel" class="hint" style="font-size:13px"></div>
+            <textarea id="templateEditor" placeholder="範本內容..." style="min-height:120px"></textarea>
+            <div class="hint-note">僅供參考格式，不會自動帶入正式段落——請用下方每段卡片上的「插入」工具列組出實際內容</div>
+            <div class="row">
+              <button class="btn-download" id="templateSaveBtn" type="button">另存新範本</button>
+              <button class="btn-download" id="templateDeleteBtn" type="button">刪除此範本</button>
+            </div>
           </div>
         </div>
 
+        <div class="field">
+          <div class="field-label"><span class="title-highlight">subject_definitions</span><span class="hint">會依參考圖片/語音自動更新，手動打字就不再自動蓋掉；清空文字框可以重新恢復自動</span></div>
+          <textarea id="subjectDefinitions" style="min-height:90px" placeholder="&lt;Subject 1&gt; = &lt;Picture 1&gt;, the character (identity fully_preserved)"></textarea>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <span style="display:inline-flex;align-items:center;gap:8px">
+              <span class="title-highlight">summary</span>
+              <button type="button" class="btn-download" id="aiGenerateOpenBtn" style="font-size:11px;padding:3px 8px">✨ AI 產生 Prompt</button>
+            </span>
+          </div>
+          <textarea id="summaryInput" style="min-height:76px" placeholder="summary：整部影片一句話描述"></textarea>
+        </div>
+
+        <div class="field">
+          <div class="field-label">
+            <span style="display:inline-flex;align-items:center;gap:8px">
+              <span class="title-highlight" title="依參考圖片/音訊自動計算，唯讀">retention_analysis</span>
+              <select id="retentionLevelSelect" style="width:150px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap" title="身分還原程度（retention_analysis，套用到全部選取的人物）">
+                <option value="fully_preserved" selected>fully_preserved（完全保留，最強）</option>
+                <option value="fully_preserved_with_scene">fully_preserved_with_scene（連服裝場景都保留，適合連續多段的同一鏡位發言）</option>
+                <option value="fully_preserved_with_wardrobe">fully_preserved_with_wardrobe（臉+衣服鎖照片，場景交給文字描述，適合去背照片）</option>
+                <option value="partially_preserved">partially_preserved（部分保留，特徵可能改變）</option>
+                <option value="attribute_transfer">attribute_transfer（特徵轉移到另一個人物）</option>
+                <option value="weak_reference">weak_reference（弱參考，只保留風格/氛圍）</option>
+              </select>
+              <select id="refImageSizeSelect" style="width:120px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap" title="參考圖保真度：'max' 用參考圖 2048px 短邊，身分還原較準；'match' 縮到跟輸出解析度一樣大，較快但細節較少（node 官方 tooltip 的原話）">
+                <option value="max" selected>高保真 max（較慢，官方建議）</option>
+                <option value="match">標準 match（較快）</option>
+              </select>
+            </span>
+          </div>
+          <textarea id="retentionAnalysisPreview" readonly style="min-height:120px;opacity:0.75" placeholder="尚未選擇參考圖片"></textarea>
+        </div>
+
         <div id="segmentBlockSlotPrompt"></div>
+
+        <div class="field">
+          <div class="field-label"><span class="title-highlight">non_diegetic_music</span><span class="hint" id="bgMusicHintPrompt"></span></div>
+          <input type="text" id="musicInput" title="有上傳背景音樂時會自動帶入建議文字；沒有背景音樂就留空即可，兩者會跟著背景音樂的上傳/移除自動連動（可自行修改覆蓋）" placeholder="沒有背景音樂時留空即可，上傳後會自動帶入建議文字" />
+        </div>
+
+        <div class="field">
+          <div class="row">
+            <span class="field-label" style="margin:0">Seed:</span>
+            <input type="number" id="seedInput" placeholder="留空 = 隨機" style="width:140px" min="0" max="18446744073709551615" />
+            <span class="field-label" style="margin:0">生成範圍:</span>
+            <input type="number" id="runUpToSegmentInput" placeholder="留空 = 全部段落" style="width:140px" min="1" />
+            <span class="hint" id="lastSeedHint" style="margin-left:auto"></span>
+          </div>
+          <div class="hint-note">同一組 seed + 同一份 prompt 理論上會生出接近的結果，適合做 A/B 對照測試；合法範圍 0 ~ 18446744073709551615（ComfyUI RandomNoise node 本身的限制）。生成範圍：跑到第幾段就停，之後可以「續跑」剩下的段落</div>
+        </div>
+        <div class="generate-bar">
+          <div class="row" style="gap:8px;flex-wrap:nowrap">
+            <button class="btn-generate" id="generateBtn" style="flex:none">開始生成</button>
+            <button class="btn-download" id="stopBtn" type="button" style="display:none;flex-shrink:0">■ 停止</button>
+            <button class="btn-download" id="workflowPreviewBtn" type="button" title="用目前的設定（參考圖片/語音/音樂/步數等）組出目前這段的 ComfyUI workflow，下載成 json 檔並開啟 ComfyUI——下載完把檔案拖進 ComfyUI 畫布就能看到完整接線圖。設定改了要重新看，再按一次這個按鈕即可">🔌 檢視接線圖</button>
+          </div>
+          <div class="hint-note" id="workflowPreviewMsg" style="display:none"></div>
+          <div class="est-line" id="estLine"></div>
+          <div id="errorMsg"></div>
+          <div class="row" id="jobActionBar" style="display:none;gap:8px;margin-top:8px">
+            <button class="btn-download" id="resumeJobBtn" type="button" style="display:none">▶ 續跑剩餘段落</button>
+            <button class="btn-generate" id="concatenateJobBtn" type="button" style="display:none">🎬 合成 Final 影片</button>
+            <span class="hint" id="jobActionHint" style="margin-left:auto"></span>
+          </div>
+        </div>
       </div>
 
       <div class="tab-panel" data-tab-panel="generate" style="display:none">
-        <div id="segmentBlockSlotGenerate"></div>
-        <div class="field">
-          <div class="field-label"><span>播放區</span><span class="hint" id="playbackLabel">尚未有影片</span></div>
-          <div id="playbackArea"><div class="empty-state">生成完成後會顯示在這裡</div></div>
+        <div id="generateEmptyState" class="empty-state">尚未送出生成</div>
+        <div id="generateContentSections" style="display:none">
+          <div class="field">
+            <div class="field-label"><span>已送出的正式 Prompt</span><span class="hint">確認結果用，不可編輯——要改內容請回「Prompt 輸入」分頁</span></div>
+            <div id="generateResultCards"></div>
+          </div>
+          <div class="field">
+            <div class="field-label"><span>播放區</span><span class="hint" id="playbackLabel">尚未有影片</span></div>
+            <div id="playbackArea"><div class="empty-state">生成完成後會顯示在這裡</div></div>
+          </div>
+          <div class="field">
+            <div class="field-label"><span>生成紀錄</span><span class="hint">跟著這個專案走，Save/Load/Save As 都會連動</span></div>
+            <div class="queue" id="jobHistoryList"></div>
+          </div>
         </div>
       </div>
 
@@ -473,16 +692,72 @@
       </div>
 
       <div class="field" id="segmentBlock" style="display:none">
-        <div class="field-label"><span>分段內容</span><span class="hint" id="segPreviewToggleHint" style="cursor:pointer;text-decoration:underline">預覽組合後的完整 Prompt</span></div>
+        <div class="field-label">
+          <span style="display:inline-flex;align-items:center;gap:8px">
+            <span class="title-highlight">detailed_description</span>
+            <button type="button" class="btn-download" id="segReviewEnBtn" style="font-size:11px;padding:3px 8px">檢視送出的正式 Prompt（英文，Haiku 產生）</button>
+          </span>
+        </div>
+        <div class="hint-note">每段的環境音輸入框對應 overall_soundscape，就在各段卡片裡</div>
         <div id="segmentCards"></div>
-        <pre id="segPreviewBox" class="mono" style="display:none;white-space:pre-wrap;background:var(--panel-raised);border:1px solid var(--line);border-radius:5px;padding:12px;font-size:11.5px;max-height:320px;overflow:auto"></pre>
       </div>
+    </div>
+  </div>
+</div>
 
-      <div class="generate-bar">
-        <button class="btn-generate" id="generateBtn">開始生成</button>
-        <div class="est-line" id="estLine"></div>
-        <div id="errorMsg"></div>
+<div id="promptReviewModal" class="modal-overlay" style="display:none">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <span>正式 Prompt 預覽（英文，Haiku 產生）</span>
+      <button type="button" id="promptReviewCloseBtn" class="modal-close-btn" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body" id="segReviewEnBox"></div>
+  </div>
+</div>
+
+<div id="aiGenerateModal" class="modal-overlay" style="display:none">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <span class="collapsible-title-group"><span>✨ AI 產生 Prompt</span><span class="hint" id="aiGenerateCharCount">0 字</span></span>
+      <button type="button" id="aiGenerateModalCloseBtn" class="modal-close-btn" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <textarea id="aiGenerateIdeaInput" placeholder="描述這段（或整個故事）想要什麼內容，例如：女孩在森林裡跟動物玩，最後在湖邊坐下" style="min-height:104px"></textarea>
+        <div class="row">
+          <div class="toggle-group" id="aiGenerateScopeToggle">
+            <div class="toggle-opt on" data-scope="active">套用到目前作用中的一段</div>
+            <div class="toggle-opt" data-scope="all">生成整個多段故事</div>
+          </div>
+          <button class="btn-download" id="aiGenerateBtn" type="button" style="margin-left:auto">產生</button>
+        </div>
+        <div class="hint-note">用 Haiku 把描述展開成分鏡草稿（含背景音、合適時會加對白）＋專案主題（summary）；「整個多段故事」會依現有分段數量把劇情接續分配到每一段。會直接覆蓋目標段落的 Shot 內容跟環境音，還有專案主題，填完可以照樣手動修改</div>
+        <div id="aiGenerateMsg"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="imageLightboxModal" class="modal-overlay" style="display:none">
+  <div class="modal-panel" style="max-width:min(90vw,900px)">
+    <div class="modal-header">
+      <span id="imageLightboxTitle"></span>
+      <button type="button" id="imageLightboxCloseBtn" class="modal-close-btn" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;justify-content:center">
+      <img id="imageLightboxImg" src="" alt="" style="max-width:100%;max-height:80vh;object-fit:contain" />
+    </div>
+  </div>
+</div>
+
+<div id="videoLightboxModal" class="modal-overlay" style="display:none">
+  <div class="modal-panel" style="max-width:min(90vw,900px)">
+    <div class="modal-header">
+      <span id="videoLightboxTitle"></span>
+      <button type="button" id="videoLightboxCloseBtn" class="modal-close-btn" aria-label="關閉">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;justify-content:center">
+      <video id="videoLightboxVideo" controls autoplay style="max-width:100%;max-height:80vh"></video>
     </div>
   </div>
 </div>
@@ -492,6 +767,7 @@ const API = "";
 
 // ---------- Auth ----------
 const AUTH_TOKEN_KEY = 'h3studio_auth_token';
+const LAST_PROJECT_KEY = 'h3studio_last_project_id';
 let authToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
 
 function showLoginOverlay(message) {
@@ -685,6 +961,38 @@ async function checkComfyHealth() {
 checkComfyHealth();
 setInterval(checkComfyHealth, 10000);
 
+// 連線正常時開 ComfyUI 自己的網頁介面（可以看到目前的 workflow/node
+// graph、佇列狀態）；沒連上就當作手動重新檢查一次，不用等下一個 10 秒
+// 輪詢（2026-09-02）。ComfyUI 用 --listen 127.0.0.1 只收本機連線，所以
+// 這個連結只有在瀏覽器跟 ComfyUI 同一台機器上才連得到。
+document.getElementById('comfyStatusChip').addEventListener('click', () => {
+  if (!comfyUiAlive) checkComfyHealth();
+});
+
+// Model name is static per boot (only changes if someone swaps the
+// checkpoint/LoRA in template_ref2va_api.json + restarts) - fetch once
+// straight from that template via the backend so this never drifts out of
+// sync with what's actually wired into the workflow graph.
+(async () => {
+  try {
+    const res = await fetch(`${API}/api/model-info`);
+    const j = await res.json();
+    const parts = [j.unet_name, j.lora_name].filter(Boolean);
+    document.getElementById('modelNameLine').textContent = parts.join(' + ');
+    const rows = [
+      ['主生成模型 (UNET)', j.unet_name],
+      ['加速 LoRA', j.lora_name],
+      ['text/vision encoder (CLIP)', j.clip_name],
+      ['VAE（影片）', j.vae_video_name],
+      ['VAE（音訊）', j.vae_audio_name],
+      ['人物照生成引擎 (SD3.5)', j.character_photo_ckpt_name],
+    ];
+    document.getElementById('modelReferenceTable').innerHTML = rows
+      .map(([label, value]) => `<div>${escapeHtml(label)}：${escapeHtml(value || '—')}</div>`)
+      .join('');
+  } catch (e) { /* non-critical - leave line blank */ }
+})();
+
 // ---------- GPU / CPU live scrolling chart ----------
 const STATS_HISTORY_LEN = 60; // ~2 minutes at a 2s poll interval
 const gpuHistory = [];
@@ -736,11 +1044,14 @@ updateSystemStats();
 setInterval(updateSystemStats, 2000);
 
 // ---------- Tab switching (left: 專案/設定, right: 專案內容/Prompt輸入/生成) ----------
-// The segment table (#segmentBlock) is one shared element used by both
-// "Prompt 輸入" (editable) and "生成" (same cards, but renderSegmentCards
-// already locks them read-only + shows status/play once a job is
-// running) - it physically moves between each tab's slot rather than
-// being duplicated, so there's only ever one source of truth.
+// #segmentBlock (the editable draft cards) lives permanently under the
+// "Prompt 輸入" tab now. "生成" shows a separate read-only view
+// (#generateResultCards, built from the actually-submitted job data) since
+// 2026-08-25 - draft-editing and reviewing a sent generation are no longer
+// the same content, so they don't share one moving element anymore.
+document.getElementById('segmentBlockSlotPrompt').appendChild(document.getElementById('segmentBlock'));
+document.getElementById('segmentBlock').style.display = 'flex';
+
 function switchTab(group, name) {
   document.querySelectorAll(`.tab-bar[data-tab-group="${group}"] .tab-btn`).forEach(btn =>
     btn.classList.toggle('on', btn.dataset.tab === name));
@@ -748,16 +1059,11 @@ function switchTab(group, name) {
   container.querySelectorAll('.tab-panel').forEach(panel =>
     panel.style.display = panel.dataset.tabPanel === name ? 'flex' : 'none');
 
-  if (group === 'right') {
-    const block = document.getElementById('segmentBlock');
-    const slot = name === 'prompt' ? document.getElementById('segmentBlockSlotPrompt')
-      : name === 'generate' ? document.getElementById('segmentBlockSlotGenerate') : null;
-    if (slot) {
-      slot.appendChild(block);
-      block.style.display = 'flex';
-    } else {
-      block.style.display = 'none';
-    }
+  if (group === 'right' && name === 'prompt') {
+    renderSegmentCards();
+  }
+  if (group === 'right' && name === 'generate') {
+    renderGenerateResultCards(lastJobResponse);
   }
 }
 document.querySelectorAll('.tab-bar').forEach(bar => {
@@ -767,7 +1073,10 @@ document.querySelectorAll('.tab-bar').forEach(bar => {
     switchTab(bar.dataset.tabGroup, btn.dataset.tab);
   });
 });
-switchTab('right', 'content'); // content tab is "on" by default in HTML, but the block still needs its first placement
+// The initial switchTab('right', 'content') call itself is deferred to the
+// very end of this script (not here) - it calls renderSegmentCards(),
+// which reads `segmentRows`, a `let` declared much further down; calling
+// it this early would hit that binding's temporal dead zone.
 
 // ---------- Quick 15s single-segment test preset ----------
 document.getElementById('quick15sBtn').addEventListener('click', () => {
@@ -776,88 +1085,240 @@ document.getElementById('quick15sBtn').addEventListener('click', () => {
   updateHints();
 });
 
+// ---------- AI 產生 Prompt (2026-08-25) - expands a short idea into a
+// shot-by-shot Chinese draft via Haiku (prompt_rewriter.generate_shot_draft
+// - deliberately creative, unlike the narrow-translation calls elsewhere).
+// Scope is either just the last-focused segment (activeSegmentIndex,
+// already tracked for the translate buttons) or every segment at once as
+// one continuous story. Always overwrites the target segment(s)' Shot/
+// soundscape directly (no confirm prompt) - never submitted anywhere on
+// its own, fully editable afterward same as any other insert-toolbar
+// action. ----------
+let aiGenerateScope = 'active';
+document.getElementById('aiGenerateScopeToggle').addEventListener('click', (e) => {
+  const opt = e.target.closest('.toggle-opt');
+  if (!opt) return;
+  for (const c of e.currentTarget.children) c.classList.remove('on');
+  opt.classList.add('on');
+  aiGenerateScope = opt.dataset.scope;
+});
+document.getElementById('aiGenerateIdeaInput').addEventListener('input', (e) => {
+  document.getElementById('aiGenerateCharCount').textContent = `${e.target.value.length} 字`;
+});
+document.getElementById('aiGenerateBtn').addEventListener('click', async () => {
+  const idea = document.getElementById('aiGenerateIdeaInput').value.trim();
+  const msg = document.getElementById('aiGenerateMsg');
+  msg.innerHTML = '';
+  if (!idea) { msg.innerHTML = '<div class="msg error">請先輸入描述</div>'; return; }
+  if (!segmentRows.length) { msg.innerHTML = '<div class="msg error">目前沒有分段卡片</div>'; return; }
+  const applyToAll = aiGenerateScope === 'all';
+  const targetIndexes = applyToAll ? segmentRows.map((_, i) => i) : [Math.min(activeSegmentIndex, segmentRows.length - 1)];
+  const btn = document.getElementById('aiGenerateBtn');
+  btn.disabled = true;
+  btn.textContent = '產生中...';
+  try {
+    const numSubjects = selectedRefLibraryImages.filter(x => (x.role || 'subject') === 'subject').length;
+    const hasAudio = !!(currentRefAudioFilename || selectedVoiceProfile);
+    const fd = new FormData();
+    fd.append('idea', idea);
+    fd.append('duration_seconds', document.getElementById('segmentLength').value || 15);
+    fd.append('num_subjects', numSubjects);
+    fd.append('has_audio', hasAudio);
+    fd.append('num_segments', targetIndexes.length);
+    const res = await authFetch(`${API}/api/prompt/generate`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || 'AI 產生失敗');
+    targetIndexes.forEach((idx, i) => {
+      const seg = body.segments[i];
+      if (!seg) return;
+      segmentRows[idx].shot = seg.shot;
+      segmentRows[idx].soundscape = seg.soundscape;
+      delete reviewedPrompts[idx];
+    });
+    if (body.summary) {
+      document.getElementById('summaryInput').value = body.summary;
+      document.getElementById('summaryInput').dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    renderSegmentCards();
+    document.getElementById('aiGenerateIdeaInput').value = '';
+    document.getElementById('aiGenerateCharCount').textContent = '0 字';
+    msg.innerHTML = applyToAll
+      ? `<div class="hint-note">已填入全部 ${targetIndexes.length} 段 + 專案主題，可以再手動修改</div>`
+      : `<div class="hint-note">已填入 Seg ${targetIndexes[0] + 1} + 專案主題，可以再手動修改</div>`;
+    setTimeout(closeAiGenerateModal, 900);
+  } catch (e) {
+    msg.innerHTML = `<div class="msg error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '產生';
+  }
+});
+
+// ---------- Character reference photo generation (2026-08-26) ----------
+// Extracts characters from the AI-generate idea text, lets the user
+// generate an SD3.5 portrait per character (repeatable until they like
+// one), and saves it straight into the ref-image library - the same one
+// used for manually-uploaded photos - so it's immediately selectable as a
+// normal <Picture N>/<Subject N> reference. See prompt_rewriter.py's
+// documented reasoning for why "no reference image" text-only continuity
+// doesn't reliably lock a face across independently-generated segments.
+let extractedCharacters = []; // [{name, description_zh, description_en, _photo?, _saved?}]
+
+function renderCharacterList() {
+  const container = document.getElementById('characterList');
+  if (!extractedCharacters.length) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = extractedCharacters.map((c, i) => `
+    <div class="seg-card">
+      <div class="seg-card-head">
+        <span class="seg-card-index">${escapeHtml(c.name)}</span>
+      </div>
+      <div class="hint-note">${escapeHtml(c.description_zh)}</div>
+      <div class="row" style="margin-top:8px;align-items:center">
+        <button class="btn-download" data-gen-char-photo="${i}" type="button">${c._photo ? '換一張' : '生成照片'}</button>
+        ${c._photo && !c._saved ? `<button class="btn-download" data-save-char-photo="${i}" type="button">加入圖庫</button>` : ''}
+        <span class="hint" data-char-status="${i}" style="margin-left:auto"></span>
+      </div>
+      ${c._photo ? `
+        <div class="ref-image-slot" style="width:96px;height:96px;cursor:zoom-in" data-view-char-photo="${i}">
+          <img src="${mediaUrl(API + '/api/uploads/image/' + encodeURIComponent(c._photo.filename))}" alt="${escapeAttr(c.name)}" />
+          ${c._saved ? '<span class="ref-image-tag">已存入圖庫</span>' : ''}
+        </div>` : ''}
+    </div>
+  `).join('');
+  container.querySelectorAll('[data-gen-char-photo]').forEach(el =>
+    el.addEventListener('click', () => generateCharacterPhoto(parseInt(el.dataset.genCharPhoto))));
+  container.querySelectorAll('[data-save-char-photo]').forEach(el =>
+    el.addEventListener('click', () => saveCharacterPhotoToLibrary(parseInt(el.dataset.saveCharPhoto))));
+  container.querySelectorAll('[data-view-char-photo]').forEach(el =>
+    el.addEventListener('click', () => {
+      const c = extractedCharacters[parseInt(el.dataset.viewCharPhoto)];
+      openImageLightbox(mediaUrl(API + '/api/uploads/image/' + encodeURIComponent(c._photo.filename)), c.name);
+    }));
+}
+
+async function generateCharacterPhoto(idx) {
+  const c = extractedCharacters[idx];
+  const btn = document.querySelector(`[data-gen-char-photo="${idx}"]`);
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '生成中...（第一次可能要幾分鐘載入模型）';
+  try {
+    const fd = new FormData();
+    fd.append('description', c.description_en);
+    fd.append('name', c.name);
+    fd.append('seed', Math.floor(Math.random() * 2147483647));
+    const res = await authFetch(`${API}/api/characters/generate-photo`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '生成失敗');
+    c._photo = body;
+    c._saved = false;
+    renderCharacterList();
+  } catch (e) {
+    alert('生成失敗：' + e.message);
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+
+async function saveCharacterPhotoToLibrary(idx) {
+  const c = extractedCharacters[idx];
+  const btn = document.querySelector(`[data-save-char-photo="${idx}"]`);
+  btn.disabled = true;
+  btn.textContent = '加入中...';
+  try {
+    const fd = new FormData();
+    fd.append('filename', c._photo.filename);
+    fd.append('name', c.name);
+    const res = await authFetch(`${API}/api/characters/save-to-library`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '加入圖庫失敗');
+    c._saved = true;
+    await refreshRefLibrary();
+    renderCharacterList();
+  } catch (e) {
+    alert('加入圖庫失敗：' + e.message);
+    btn.disabled = false;
+    btn.textContent = '加入圖庫';
+  }
+}
+
+document.getElementById('extractCharactersBtn').addEventListener('click', async () => {
+  const text = document.getElementById('extractCharactersInput').value.trim();
+  const msg = document.getElementById('extractCharactersMsg');
+  const btn = document.getElementById('extractCharactersBtn');
+  if (!text) { msg.textContent = '請先在上面的描述欄輸入文字'; return; }
+  btn.disabled = true;
+  msg.textContent = '分析中...';
+  try {
+    const fd = new FormData();
+    fd.append('text', text);
+    const res = await authFetch(`${API}/api/characters/extract`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '分析失敗');
+    extractedCharacters = body.characters || [];
+    msg.textContent = extractedCharacters.length ? `找到 ${extractedCharacters.length} 個人物` : '沒有找到明確的人物';
+    renderCharacterList();
+  } catch (e) {
+    msg.textContent = '';
+    alert('分析失敗：' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------- Prompt template library ----------
+// 2026-08-25: trimmed to match exactly what the segment card's own input
+// boxes hold (Shot 內容/台詞 + 環境音) - subject_definitions/summary/
+// retention_analysis/non_diegetic_music are never hand-typed per segment
+// (they're project-level fields that auto-fill or get computed
+// deterministically elsewhere), so showing them here was just noise
+// disconnected from what a template is actually for: an example of what
+// to type into those two boxes. Each category gets exactly one
+// single-segment example, collectively covering dialogue, voiceover,
+// per-shot camera direction, and soundscape across the 4.
 const BUILTIN_TEMPLATES = {
   "1": [
-    { name: "單人・基本結構", builtin: true, content:
-`subject_definitions:
-<Subject 1> = <Picture 1>, the character (identity fully_preserved)
+    { name: "單人・對白＋運鏡＋環境音", builtin: true, content:
+`Shot 內容/台詞:
+[Shot 1] <Subject 1> 站在滿是雨痕的窗邊，望向窗外，鏡頭從遠處緩緩靠近。
+[Shot 2] 鏡頭推近她在玻璃上的倒影，柔和的灰色天光灑落。(S1) says: <d>[Chinese] 我一直在想，早該回她電話的。</d>
+[Shot 3] 她低下頭輕輕嘆了口氣，鏡頭緩緩拉遠，只留下窗邊的孤影。
 
-summary: [一句話描述場景]
-
-detailed_description:
-[Shot 1] <Subject 1> [動作描述]. (S1) says <d>[English] [台詞內容]</d>
-Camera [運鏡描述], natural lighting.
-
-overall_soundscape: [環境音描述]
-
-non_diegetic_music: N/A` },
+環境音:
+雨滴持續打在玻璃上的聲音，遠處城市車流的低鳴。` },
   ],
   "2": [
-    { name: "雙人・家事分配爭吵（已驗證）", builtin: true, content:
-`subject_definitions:
-<Subject 1> = <Picture 1>, the man (identity fully_preserved)
-<Subject 2> = <Picture 2>, the woman (identity fully_preserved)
+    { name: "雙人・對白交鋒＋運鏡＋環境音", builtin: true, content:
+`Shot 內容/台詞:
+[Shot 1] <Subject 1> 站在水槽旁雙手抱胸，鏡頭固定在中景雙人鏡頭，面向流理台另一側的 <Subject 2>。(S1) says: <d>[Chinese] 我每天晚上都在洗碗，你連洗衣服都不做。</d>
+[Shot 2] <Subject 2> 靠著流理台，鏡頭緩緩推近她逐漸僵硬的表情。(S2) says: <d>[Chinese] 這不公平，我週末都在打掃整間房子。</d>
+[Shot 3] 鏡頭拉遠回到兩人的中景，兩人沉默對視，氣氛僵持不下。
 
-summary: Two people have a heated argument in a modern living room about the unfair division of household chores.
-
-detailed_description:
-[Shot 1] <Subject 1> stands near the sofa, gesturing with his hands, visibly frustrated, facing <Subject 2>. (S1) says <d>[English] I already do all the dishes every night, you never help with the laundry!</d>
-[Shot 2] <Subject 2> stands facing him near the kitchen counter, arms crossed, equally frustrated. (S2) replies <d>[English] That's not fair — I clean the whole house every weekend while you just watch TV!</d>
-Camera holds a static medium two-shot throughout, natural window light, handheld documentary feel.
-
-overall_soundscape: tense living room ambience, faint distant traffic outside, no underlying music during the dialogue.
-
-non_diegetic_music: N/A` },
-    { name: "雙人・基本結構（空白）", builtin: true, content:
-`subject_definitions:
-<Subject 1> = <Picture 1>, [角色1] (identity fully_preserved)
-<Subject 2> = <Picture 2>, [角色2] (identity fully_preserved)
-
-summary: [兩人場景描述]
-
-detailed_description:
-[Shot 1] <Subject 1> [動作]. (S1) says <d>[English] [台詞1]</d>
-[Shot 2] <Subject 2> [動作]. (S2) says <d>[English] [台詞2]</d>
-Camera [運鏡描述]。
-
-overall_soundscape: [環境音]
-
-non_diegetic_music: N/A` },
+環境音:
+背景傳來水龍頭滴水聲，遠處車流聲，對話期間沒有音樂。` },
   ],
   "3": [
-    { name: "三人・基本結構（空白）", builtin: true, content:
-`subject_definitions:
-<Subject 1> = <Picture 1>, [角色1] (identity fully_preserved)
-<Subject 2> = <Picture 2>, [角色2] (identity fully_preserved)
-<Subject 3> = <Picture 3>, [角色3] (identity fully_preserved)
+    { name: "三人・輪流對白＋運鏡＋環境音", builtin: true, content:
+`Shot 內容/台詞:
+[Shot 1] 三人圍坐在小教室的桌子旁，鏡頭固定在靜止的三人廣角鏡頭。<Subject 1> 從資料夾中抬起頭。(S1) says: <d>[Chinese] 他缺考了，補考的作業也還沒交。</d>
+[Shot 2] 鏡頭切到 <Subject 2> 的近景，他低頭看著桌面，一臉尷尬。(S2) says: <d>[Chinese] 我搞錯日期了，對不起。</d>
+[Shot 3] 鏡頭搖向 <Subject 3>，他關切地向前傾身。(S3) says: <d>[Chinese] 我們這個週末一定會讓他補完。</d>
 
-summary: [三人場景描述]
-
-detailed_description:
-[Shot 1] <Subject 1> [動作]. (S1) says <d>[English] [台詞1]</d>
-[Shot 2] <Subject 2> [動作]. (S2) says <d>[English] [台詞2]</d>
-[Shot 3] <Subject 3> [動作]. (S3) says <d>[English] [台詞3]</d>
-
-overall_soundscape: [環境音]
-
-non_diegetic_music: N/A` },
+環境音:
+牆上時鐘輕輕滴答作響，走廊外傳來隱約的人聲。` },
   ],
   "multi": [
-    { name: "多人・主角+背景群眾（3張為上限，其餘用文字描述）", builtin: true, content:
-`subject_definitions:
-<Subject 1> = <Picture 1>, [主角1] (identity fully_preserved)
-<Subject 2> = <Picture 2>, [主角2] (identity fully_preserved)
-Additional background people are described in prose only — no dedicated reference photo beyond the 3-image limit (e.g. "a small group of coworkers in the background, out of focus").
+    { name: "多人・主角對白＋旁白＋背景群眾＋環境音", builtin: true, content:
+`Shot 內容/台詞:
+[Shot 1] <Subject 1> 在陽光明媚的人行道上表演彩色球棒雜耍，鏡頭固定在寬廣的靜止鏡頭，一群圍觀的路人在背景中形成失焦的人群。(S1) says in an off-screen voiceover: <d>[Chinese] 我還記得第一次看到有人這樣表演的時候。</d>, lips remain completely closed.
+[Shot 2] 鏡頭推近站在人群最前面的 <Subject 2>，他睜大眼睛拍手叫好。(S2) says: <d>[Chinese] 再表演一次！</d>
+[Shot 3] 鏡頭拉遠，呈現整條街道與圍觀人群的熱鬧氛圍，<Subject 1> 繼續表演，背景群眾持續鼓掌。
 
-summary: [多人場景，例如辦公室會議、街頭人群等]
-
-detailed_description:
-[Shot 1] <Subject 1> [動作], with several unnamed background figures visible but out of focus. (S1) says <d>[English] [台詞]</d>
-
-overall_soundscape: [多人環境音，例如人聲嘈雜、腳步聲]
-
-non_diegetic_music: N/A` },
+環境音:
+人群中零星的掌聲與交談聲，遠處城市車流，畫面外某處傳來街頭藝人的吉他聲。` },
   ],
 };
 
@@ -871,6 +1332,14 @@ function saveCustomTemplates(data) {
   localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(data));
 }
 
+// ---------- Collapsible cards (2026-08-25): Prompt 範本庫 (starts
+// collapsed, marked in the HTML via the "collapsed" class already on
+// #templateLibraryCard) / AI 產生 Prompt (starts open) - toggled purely by
+// clicking the .collapsible class on/off, no state persisted. ----------
+document.querySelectorAll('.collapsible-header').forEach(header => {
+  header.addEventListener('click', () => header.closest('.collapsible').classList.toggle('collapsed'));
+});
+
 let currentTemplateCategory = "1";
 
 function templatesForCategory(cat) {
@@ -880,8 +1349,16 @@ function templatesForCategory(cat) {
 
 function refreshTemplateSelect() {
   const sel = document.getElementById('templateSelect');
+  const label = document.getElementById('templateSelectLabel');
   const list = templatesForCategory(currentTemplateCategory);
   sel.innerHTML = list.map((t, i) => `<option value="${i}">${t.name}</option>`).join('');
+  // A dropdown implies there's something to choose between - with only the
+  // one built-in template per category (2026-08-25), show its name as
+  // plain text instead. Reappears automatically once "另存新範本" adds a
+  // second entry to a category.
+  sel.style.display = list.length > 1 ? '' : 'none';
+  label.style.display = list.length > 1 ? 'none' : '';
+  label.textContent = list.length === 1 ? list[0].name : '';
   if (list.length) {
     document.getElementById('templateEditor').value = list[0].content;
   } else {
@@ -928,16 +1405,6 @@ function parseTemplateIntoParts(content) {
   return { subject, summary, shot: shotLines.join('\n'), camera, soundscape, music };
 }
 
-document.getElementById('templateApplyBtn').addEventListener('click', () => {
-  const parts = parseTemplateIntoParts(document.getElementById('templateEditor').value);
-  document.getElementById('subjectDefinitions').value = parts.subject;
-  document.getElementById('summaryInput').value = parts.summary;
-  document.getElementById('musicInput').value = parts.music || 'N/A';
-  ensureSegmentRowsCount(segmentRows.length || 1);
-  segmentRows[activeSegmentIndex] = { shot: parts.shot, camera: parts.camera, soundscape: parts.soundscape };
-  renderSegmentCards();
-});
-
 document.getElementById('templateSaveBtn').addEventListener('click', () => {
   const name = prompt('範本名稱：');
   if (!name) return;
@@ -973,30 +1440,6 @@ async function translateText(text, target) {
   return j.translated;
 }
 
-// Per-row, per-field translate/undo. Originals are kept on
-// segmentRows[i]._original[key] so "還原全部" can restore shot/camera/
-// soundscape independently of whichever ones were actually translated.
-async function translateField(idx, key, target) {
-  const row = segmentRows[idx];
-  if (!row || !row[key] || !row[key].trim()) return;
-  row._original = row._original || {};
-  if (row._original[key] == null) row._original[key] = row[key];
-  try {
-    row[key] = await translateText(row[key], target);
-    renderSegmentCards();
-  } catch (e) {
-    alert('翻譯失敗：' + e.message);
-  }
-}
-function resetRowLang(idx) {
-  const row = segmentRows[idx];
-  if (row && row._original) {
-    Object.keys(row._original).forEach(key => { row[key] = row._original[key]; });
-    delete row._original;
-    renderSegmentCards();
-  }
-}
-
 // ---------- Voice profile recording & management ----------
 const RECORD_MAX_SECONDS = 20;
 let mediaRecorder = null;
@@ -1005,6 +1448,7 @@ let recordTimerHandle = null;
 let recordAutoStopHandle = null;
 let recordedBlob = null;
 let selectedVoiceProfile = null; // { id, name, comfy_filename }
+let voiceProfileEntries = [];
 
 async function refreshMicList() {
   try {
@@ -1094,26 +1538,25 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
 async function refreshProfileList() {
   const res = await authFetch(`${API}/api/voice-profiles`);
   const { profiles } = await res.json();
+  voiceProfileEntries = profiles;
+
+  const sel = document.getElementById('voiceProfileSelect');
+  sel.innerHTML = '<option value="">（選擇語音 Profile）</option>' +
+    profiles.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+  sel.value = selectedVoiceProfile ? selectedVoiceProfile.id : '';
+
   const list = document.getElementById('profileList');
   if (!profiles.length) {
     list.innerHTML = '<div class="empty-state">尚無 Profile</div>';
     return;
   }
   list.innerHTML = profiles.map(p => `
-    <div class="seg-row" style="grid-template-columns: 1fr auto auto auto">
+    <div class="seg-row" style="grid-template-columns: 1fr auto auto">
       <span>${p.name}</span>
       <span class="seg-time">${p.duration ? p.duration.toFixed(1) + 's' : '—'}</span>
-      <button class="btn-download" data-use="${p.id}" type="button" style="padding:4px 10px">使用</button>
       <button class="btn-download" data-del="${p.id}" type="button" style="padding:4px 10px">刪除</button>
     </div>`).join('');
 
-  list.querySelectorAll('[data-use]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const p = profiles.find(x => x.id === btn.dataset.use);
-      selectedVoiceProfile = p;
-      document.getElementById('selectedProfileHint').textContent = `使用中：${p.name}`;
-    });
-  });
   list.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('確定刪除這個 Profile？')) return;
@@ -1156,10 +1599,49 @@ async function refreshRefLibrary() {
   });
 
   const sel = document.getElementById('refLibrarySelect');
-  sel.innerHTML = '<option value="">（選擇圖庫人物）</option>' +
-    images.map(img => `<option value="${img.id}">${escapeHtml(img.name)}</option>`).join('');
+  sel.innerHTML = images.length ? images.map(img => `<option value="${img.id}">${escapeHtml(img.name)}</option>`).join('')
+    : '<option value="" disabled>（圖庫還是空的，先去「設定」分頁上傳）</option>';
+  syncRefLibrarySelectState();
 }
 refreshRefLibrary();
+
+// ---------- Settings: SageAttention toggle (2026-08-25) - a plain
+// sentinel file (SAGE_ATTENTION_FLAG_PATH) that start_comfyui.bat checks
+// at boot, since a launch-time flag can't take effect without a restart.
+// Toggling here only saves the preference - it deliberately does NOT
+// restart ComfyUI itself, so it never interrupts a job in progress. ----------
+function applySageAttentionState(enabled) {
+  document.getElementById('sageAttentionToggle').checked = enabled;
+  document.getElementById('sageAttentionChipText').textContent = `SageAttention ${enabled ? '已啟用' : '已停用'}`;
+  document.getElementById('sageAttentionChipDot').style.background = enabled ? 'var(--success)' : 'var(--text-faint)';
+  document.getElementById('sageAttentionChipDot').style.boxShadow = enabled ? '' : 'none';
+}
+async function refreshSettings() {
+  const res = await authFetch(`${API}/api/settings`);
+  if (!res.ok) return;
+  const { sage_attention_enabled } = await res.json();
+  applySageAttentionState(sage_attention_enabled);
+}
+refreshSettings();
+document.getElementById('sageAttentionToggle').addEventListener('change', async (e) => {
+  const wanted = e.target.checked;
+  const msg = document.getElementById('sageAttentionMsg');
+  e.target.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('sage_attention_enabled', wanted);
+    const res = await authFetch(`${API}/api/settings`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '儲存失敗');
+    applySageAttentionState(body.sage_attention_enabled);
+    msg.innerHTML = `<div class="hint-note">已存，重啟 ComfyUI 後才會套用（不會自動重啟）</div>`;
+  } catch (err) {
+    msg.innerHTML = `<div class="msg error">${err.message}</div>`;
+    e.target.checked = !wanted;
+  } finally {
+    e.target.disabled = false;
+  }
+});
 
 // ---------- Change password ----------
 document.getElementById('changePasswordBtn').addEventListener('click', async () => {
@@ -1179,6 +1661,43 @@ document.getElementById('changePasswordBtn').addEventListener('click', async () 
   msg.innerHTML = '<div class="hint-note">密碼已變更</div>';
 });
 
+// 去背景（白底）：一次性轉換，不直接存進圖庫——處理完先預覽，使用者按
+// 「存入圖庫」才會真的存檔，而且存的是處理過的版本（refLibProcessedFile
+// 有值就用它，沒有就用原始檔），跟這個 app 其他 AI 處理結果一律先預覽
+// 再手動存檔的規則一致（2026-09-02）。換了新檔案就清掉舊的處理結果，
+// 避免存到「舊照片的去背結果 + 新選的檔名」這種對不上的組合。
+let refLibProcessedFile = null;
+document.getElementById('refLibFile').addEventListener('change', () => {
+  refLibProcessedFile = null;
+  document.getElementById('refLibRemoveBgPreview').style.display = 'none';
+  document.getElementById('refLibRemoveBgMsg').textContent = '';
+});
+document.getElementById('refLibRemoveBgBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('refLibFile');
+  const msg = document.getElementById('refLibRemoveBgMsg');
+  const preview = document.getElementById('refLibRemoveBgPreview');
+  const btn = document.getElementById('refLibRemoveBgBtn');
+  if (!fileInput.files.length) { alert('請先選擇一張圖片'); return; }
+  btn.disabled = true;
+  msg.textContent = '去背景處理中...（第一次使用會下載模型，可能要等一下）';
+  try {
+    const fd = new FormData();
+    fd.append('file', fileInput.files[0]);
+    const res = await authFetch(`${API}/api/utils/remove-background`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('去背景失敗');
+    const blob = await res.blob();
+    refLibProcessedFile = new File([blob], 'removed_bg.png', { type: 'image/png' });
+    preview.style.backgroundImage = `url(${URL.createObjectURL(blob)})`;
+    preview.style.backgroundSize = 'cover';
+    preview.style.display = 'block';
+    msg.textContent = '已處理成白底，按「存入圖庫」會存這個版本（不會自動存檔）';
+  } catch (e) {
+    msg.textContent = '去背景失敗：' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 document.getElementById('refLibSaveBtn').addEventListener('click', async () => {
   const fileInput = document.getElementById('refLibFile');
   const name = document.getElementById('refLibNameInput').value.trim();
@@ -1186,89 +1705,213 @@ document.getElementById('refLibSaveBtn').addEventListener('click', async () => {
   if (!name) { alert('請輸入人物名稱'); return; }
   const fd = new FormData();
   fd.append('name', name);
-  fd.append('file', fileInput.files[0]);
+  fd.append('file', refLibProcessedFile || fileInput.files[0]);
   const res = await authFetch(`${API}/api/ref-image-library`, { method: 'POST', body: fd });
   if (!res.ok) { alert('存檔失敗'); return; }
   fileInput.value = '';
   document.getElementById('refLibNameInput').value = '';
+  refLibProcessedFile = null;
+  document.getElementById('refLibRemoveBgPreview').style.display = 'none';
+  document.getElementById('refLibRemoveBgMsg').textContent = '';
   await refreshRefLibrary();
 });
 
+// Keeps the <select multiple> element's own selected-option state in sync
+// with selectedRefLibraryImages, for cases that change the array without
+// going through the select itself (removing via the preview's × button,
+// restoring a saved project, a library item getting deleted).
+function syncRefLibrarySelectState() {
+  const sel = document.getElementById('refLibrarySelect');
+  const ids = new Set(selectedRefLibraryImages.map(x => x.id));
+  Array.from(sel.options).forEach(opt => { opt.selected = ids.has(opt.value); });
+}
+
+// role: 'subject' (identity reference, default) or 'anchor' (this image is
+// a compositional frame anchor for a specific shot - guide section 2.2/5.3,
+// task type "keyframe completion"). shot/frameType only matter for anchor.
 function renderSelectedRefLibrary() {
   const preview = document.getElementById('refLibrarySelectedPreview');
-  preview.innerHTML = selectedRefLibraryImages.map((img, i) => `
-    <div class="ref-image-slot">
-      <img src="${mediaUrl(API + '/api/uploads/image/' + encodeURIComponent(img.filename))}" alt="${escapeAttr(img.name)}" />
-      <span class="ref-image-tag">${escapeHtml(img.name)}</span>
-      <button class="ref-image-remove" type="button" data-unselect-lib="${i}" aria-label="移除">×</button>
-    </div>`).join('');
+  preview.innerHTML = selectedRefLibraryImages.map((img, i) => {
+    const role = img.role || 'subject';
+    return `
+    <div class="ref-image-item">
+      <div class="ref-image-slot">
+        <img src="${mediaUrl(API + '/api/uploads/image/' + encodeURIComponent(img.filename))}" alt="${escapeAttr(img.name)}" />
+        <span class="ref-image-tag">${escapeHtml(img.name)}</span>
+        <button class="ref-image-remove" type="button" data-unselect-lib="${i}" aria-label="移除">×</button>
+      </div>
+      <select class="ref-image-role" data-idx="${i}" title="這張圖是拿來認人，還是當某個 shot 的畫面錨點">
+        <option value="subject" ${role === 'subject' ? 'selected' : ''}>身分參考</option>
+        <option value="anchor" ${role === 'anchor' ? 'selected' : ''}>畫面錨點</option>
+      </select>
+      ${role === 'anchor' ? `
+        <input type="number" class="ref-image-anchor-shot" data-idx="${i}" min="1" value="${img.shot || 1}" placeholder="Shot #" />
+        <select class="ref-image-anchor-frametype" data-idx="${i}">
+          <option value="first" ${(img.frameType || 'first') === 'first' ? 'selected' : ''}>首幀</option>
+          <option value="keyframe" ${img.frameType === 'keyframe' ? 'selected' : ''}>關鍵幀</option>
+          <option value="last" ${img.frameType === 'last' ? 'selected' : ''}>尾幀</option>
+        </select>` : ''}
+    </div>`;
+  }).join('');
   preview.querySelectorAll('[data-unselect-lib]').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedRefLibraryImages.splice(parseInt(btn.dataset.unselectLib), 1);
       renderSelectedRefLibrary();
     });
   });
+  preview.querySelectorAll('.ref-image-role').forEach(el => el.addEventListener('change', () => {
+    const idx = parseInt(el.dataset.idx);
+    selectedRefLibraryImages[idx].role = el.value;
+    if (el.value === 'anchor') {
+      selectedRefLibraryImages[idx].shot = selectedRefLibraryImages[idx].shot || 1;
+      selectedRefLibraryImages[idx].frameType = selectedRefLibraryImages[idx].frameType || 'first';
+    }
+    renderSelectedRefLibrary();
+  }));
+  preview.querySelectorAll('.ref-image-anchor-shot').forEach(el => el.addEventListener('change', () => {
+    selectedRefLibraryImages[parseInt(el.dataset.idx)].shot = parseInt(el.value) || 1;
+    syncSubjectDefinitionsToSelection();
+  }));
+  preview.querySelectorAll('.ref-image-anchor-frametype').forEach(el => el.addEventListener('change', () => {
+    selectedRefLibraryImages[parseInt(el.dataset.idx)].frameType = el.value;
+    syncSubjectDefinitionsToSelection();
+  }));
+  syncRefLibrarySelectState();
+  syncSubjectDefinitionsToSelection();
 }
 
 document.getElementById('refLibrarySelect').addEventListener('change', (e) => {
-  const id = e.target.value;
-  if (!id) return;
-  e.target.value = '';
-  if (selectedRefLibraryImages.length >= 3) { alert('最多選 3 張參考圖片（含上傳檔案）'); return; }
-  if (selectedRefLibraryImages.some(x => x.id === id)) return;
-  const entry = refLibraryEntries.find(x => x.id === id);
-  if (entry) { selectedRefLibraryImages.push(entry); renderSelectedRefLibrary(); }
+  let picked = Array.from(e.target.selectedOptions).map(opt => opt.value);
+  if (picked.length > 3) {
+    alert('最多選 3 張參考圖片');
+    picked = picked.slice(0, 3);
+  }
+  // Preserve role/shot/frameType for images that stay selected - rebuilding
+  // from refLibraryEntries alone would silently reset them to defaults.
+  const prevById = new Map(selectedRefLibraryImages.map(x => [x.id, x]));
+  selectedRefLibraryImages = picked
+    .map(id => {
+      const entry = refLibraryEntries.find(x => x.id === id);
+      if (!entry) return null;
+      const prev = prevById.get(id);
+      return prev ? { ...entry, role: prev.role, shot: prev.shot, frameType: prev.frameType } : { ...entry, role: 'subject' };
+    })
+    .filter(Boolean);
+  renderSelectedRefLibrary();
 });
 
-// ---------- Reference image thumbnail preview ----------
-function defaultSubjectDefinitions(n) {
-  return Array.from({ length: n }, (_, i) =>
-    `<Subject ${i + 1}> = <Picture ${i + 1}>, the character (identity fully_preserved)`).join('\n');
+document.getElementById('voiceProfileSelect').addEventListener('change', (e) => {
+  const id = e.target.value;
+  selectedVoiceProfile = id ? voiceProfileEntries.find(p => p.id === id) || null : null;
+  document.getElementById('selectedProfileHint').textContent = selectedVoiceProfile ? `使用中：${selectedVoiceProfile.name}` : '';
+  syncSubjectDefinitionsToSelection();
+});
+
+// ---------- Reference image library selection ----------
+// Natural-language phrasing per the official guide (2026-08-25 fix - the
+// old "<Subject N> = <Picture N>, the character (identity X)" shorthand
+// never appears in any official example; retention level belongs in
+// retention_analysis only, not repeated here). anchor-role images become a
+// standalone <Picture N> entry instead of a <Subject N>. A selected voice
+// reference gets its own <Audio 1> declaration, tied to the first subject
+// if one exists (guide requires stating which target speaker it maps to).
+function defaultSubjectDefinitions(images) {
+  const lines = [];
+  let subjectCount = 0;
+  (images || []).forEach((img, i) => {
+    const pictureN = i + 1;
+    if ((img.role || 'subject') === 'anchor') {
+      const frameLabel = { first: 'first frame', keyframe: 'keyframe', last: 'last frame' }[img.frameType || 'first'];
+      lines.push(`<Picture ${pictureN}> is the ${frameLabel} of [Shot ${img.shot || 1}].`);
+    } else {
+      subjectCount++;
+      lines.push(`<Subject ${subjectCount}> is the character shown in <Picture ${pictureN}>.`);
+    }
+  });
+  const hasAudio = !!(currentRefAudioFilename || selectedVoiceProfile);
+  if (hasAudio) {
+    lines.push(subjectCount > 0
+      ? `<Audio 1> is the voice-timbre reference for <Subject 1> (S1).`
+      : `<Audio 1> is a standalone voice-timbre reference.`);
+  }
+  return lines.join('\n');
 }
 
-function renderRefImagePreviews() {
-  const input = document.getElementById('refImages');
-  const files = Array.from(input.files).slice(0, 3);
-  const preview = document.getElementById('refImagesPreview');
-  preview.innerHTML = files.map((file, i) => {
-    const url = URL.createObjectURL(file);
-    return `<div class="ref-image-slot">
-      <img src="${url}" alt="人物${i + 1}" />
-      <span class="ref-image-tag">人物${i + 1}</span>
-      <button class="ref-image-remove" type="button" data-remove-idx="${i}" aria-label="移除">×</button>
-    </div>`;
-  }).join('');
-
-  preview.querySelectorAll('[data-remove-idx]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.dataset.removeIdx);
-      const remaining = Array.from(input.files).filter((_, i) => i !== idx);
-      const dt = new DataTransfer();
-      remaining.forEach(f => dt.items.add(f));
-      input.files = dt.files;
-      renderRefImagePreviews();
-    });
-  });
-
-  // Keep subject_definitions in sync with how many reference images are
-  // loaded, but only while the user hasn't hand-edited it away from the
-  // auto-generated shape (tracked via a data flag on the textarea).
+// Keep subject_definitions in sync with the current ref-image selection
+// (roles included) and audio selection, but only while the user hasn't
+// hand-edited it away from the auto-generated shape (tracked via a data
+// flag on the textarea).
+function syncSubjectDefinitionsToSelection() {
   const subjEl = document.getElementById('subjectDefinitions');
-  if (files.length && subjEl.dataset.auto !== 'false') {
-    subjEl.value = defaultSubjectDefinitions(files.length);
+  if ((selectedRefLibraryImages.length || currentRefAudioFilename || selectedVoiceProfile) && subjEl.dataset.auto !== 'false') {
+    subjEl.value = defaultSubjectDefinitions(selectedRefLibraryImages);
     subjEl.dataset.auto = 'true';
   }
+  updateRetentionAnalysisPreview();
 }
-document.getElementById('refImages').addEventListener('change', renderRefImagePreviews);
+
+// Read-only preview of retention_analysis on the Prompt-input tab -
+// re-fetched every time ref images, ref audio, or the retention level
+// change (called from the same places syncSubjectDefinitionsToSelection()
+// already is, so it stays live whether you add a 2nd/3rd reference image
+// or an audio profile - 2026-08-26).
+async function updateRetentionAnalysisPreview() {
+  const el = document.getElementById('retentionAnalysisPreview');
+  const hasRefAudio = !!(currentRefAudioFilename || selectedVoiceProfile);
+  if (!selectedRefLibraryImages.length && !hasRefAudio) {
+    el.value = '';
+    return;
+  }
+  try {
+    const fd = new FormData();
+    fd.append('ref_image_roles', JSON.stringify(selectedRefLibraryImages.map(x => ({ role: x.role || 'subject', shot: x.shot, frame_type: x.frameType }))));
+    fd.append('retention_level', document.getElementById('retentionLevelSelect').value);
+    fd.append('has_ref_audio', hasRefAudio);
+    const res = await authFetch(`${API}/api/prompt/retention-preview`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (res.ok) el.value = body.retention_analysis || '';
+  } catch (e) { /* non-critical live preview - ignore failures */ }
+}
+document.getElementById('retentionLevelSelect').addEventListener('change', syncSubjectDefinitionsToSelection);
+
+// 2026-08-25 fix: clearing the field by hand (select-all + delete) fired
+// this same 'input' event and got marked 'false' just like typing real
+// content did - so once a project loaded with stale subject_definitions
+// (auto='false'), clearing it to try to trigger a fresh auto-fill just
+// re-locked it into manual mode with nothing in it, and no amount of
+// reselecting images/audio afterward would ever refill it (the sync
+// function checks dataset.auto first and no-ops). An empty value is never
+// a deliberate manual choice - treat it as "back to auto" and immediately
+// regenerate from whatever's currently selected.
 document.getElementById('subjectDefinitions').addEventListener('input', (e) => {
-  e.target.dataset.auto = 'false';
+  if (e.target.value.trim()) {
+    e.target.dataset.auto = 'false';
+  } else {
+    e.target.dataset.auto = 'true';
+    syncSubjectDefinitionsToSelection();
+  }
+});
+
+// Same hand-edit-detection pattern as subject_definitions above, applied
+// to non_diegetic_music vs. bg-music-file presence.
+document.getElementById('musicInput').addEventListener('input', (e) => {
+  if (e.target.value.trim()) {
+    e.target.dataset.auto = 'false';
+  } else {
+    e.target.dataset.auto = 'true';
+    syncMusicInputToBgMusic();
+  }
 });
 
 // ---------- Segment table: shared state + rendering ----------
-let segmentRows = []; // [{ shot, camera, soundscape, _original? }]
+let segmentRows = []; // [{ shot, camera, soundscape }]
+let loadedSegmentRowsSnapshot = []; // segmentRows exactly as last loaded/reset - see applyProjectData()
+let segmentSeedInputs = []; // per-segment "seed to use on next generate/regenerate" - index-aligned with segmentRows, persisted separately since it's not part of the draft text
 let activeSegmentIndex = 0;
 let currentJobId = null;
+let projectJobIds = []; // every job_id generated under the current project - persisted via collectProjectData
 let formLocked = false; // true once a job is submitted - segment fields go read-only
+let reviewedPrompts = {}; // segIdx -> { draftSnapshot, english } - set by the 中/英 review panel; used verbatim at submit time if the draft hasn't changed since
 
 function escapeHtml(s) {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1282,6 +1925,98 @@ function ensureSegmentRowsCount(n) {
   segmentRows.length = n;
 }
 
+// ---------- Insert-object toolbar (WordPress-editor-style: pick an object,
+// it drops a ready-made snippet at the cursor - not a block/rich-text
+// editor, the fields stay plain text) ----------
+const CAMERA_MOVEMENTS = [
+  { group: '固定', zh: '靜止大遠景', en: 'static wide shot, camera does not move' },
+  { group: '固定', zh: '固定特寫', en: 'locked-off close-up, no camera movement' },
+  { group: '推軌 Dolly', zh: '緩慢推進', en: 'camera slowly pushes forward (dolly in)' },
+  { group: '推軌 Dolly', zh: '緩慢拉遠', en: 'camera slowly pulls back (dolly out)' },
+  { group: '推軌 Dolly', zh: '向左橫移', en: 'camera dollies left across the scene' },
+  { group: '推軌 Dolly', zh: '向右橫移', en: 'camera dollies right across the scene' },
+  { group: '平移/俯仰', zh: '向左平移', en: 'camera pans left' },
+  { group: '平移/俯仰', zh: '向右平移', en: 'camera pans right' },
+  { group: '平移/俯仰', zh: '向上俯仰', en: 'camera tilts up' },
+  { group: '平移/俯仰', zh: '向下俯仰', en: 'camera tilts down' },
+  { group: '升降 Crane', zh: '升起', en: 'camera cranes up, revealing the wider scene' },
+  { group: '升降 Crane', zh: '降下', en: 'camera cranes down toward the subject' },
+  { group: '環繞 Orbit', zh: '緩慢環繞', en: 'camera slowly orbits around the subject' },
+  { group: '環繞 Orbit', zh: '側向弧線', en: 'camera arcs around the subject from the side' },
+  { group: '手持 Handheld', zh: '手持跟隨', en: 'handheld camera with subtle natural shake, following the subject' },
+  { group: '手持 Handheld', zh: '手持近跟', en: 'handheld camera closely trailing behind the subject' },
+  { group: '跟拍 Tracking', zh: '側面跟拍', en: 'camera tracks alongside the subject at walking pace' },
+  { group: '跟拍 Tracking', zh: '後方跟拍', en: 'camera follows the subject from behind' },
+  { group: '跟拍 Tracking', zh: '前方倒退帶', en: 'camera leads in front of the subject, moving backward' },
+  { group: '變焦 Zoom', zh: '緩慢拉近', en: 'camera slowly zooms in on the subject' },
+  { group: '變焦 Zoom', zh: '緩慢拉遠', en: 'camera slowly zooms out to reveal the surroundings' },
+  { group: '拉焦 Focus pull', zh: '前後拉焦', en: 'rack focus from the foreground to the subject in the background' },
+  { group: '拉焦 Focus pull', zh: '淺景深虛焦', en: "shallow depth of field with soft rack focus onto the subject's face" },
+  { group: '空拍 Aerial', zh: '空拍下降', en: 'aerial drone shot descending toward the scene' },
+  { group: '空拍 Aerial', zh: '空拍前飛', en: 'drone shot flying forward over the scene' },
+  { group: '視角 Angle', zh: '俯視', en: 'high-angle shot looking down on the scene' },
+  { group: '視角 Angle', zh: '仰視', en: 'low-angle shot looking up at the subject' },
+  { group: '特寫/微距', zh: '手部特寫', en: "extreme close-up insert shot on the subject's hands" },
+  { group: '特寫/微距', zh: '微距推進', en: 'macro shot slowly pushing in on a small detail' },
+  { group: '其他', zh: '快甩定格', en: 'quick whip pan that settles into a steady frame on the subject' },
+];
+const TEXT_BLUR_HINT = 'signage and any text in the background are out of focus / illegible';
+
+// Inserts text at an <input>/<textarea>'s current cursor position (replacing
+// any selection), fires 'input' so the existing per-field listeners pick up
+// the change, and optionally lands the cursor mid-insert (cursorOffset) so
+// the user can type straight into a placeholder like <d>[Chinese] |</d>.
+function insertAtCursor(el, text, cursorOffset) {
+  el.focus();
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? el.value.length;
+  el.setRangeText(text, start, end, 'end');
+  const pos = start + (cursorOffset != null ? cursorOffset : text.length);
+  el.setSelectionRange(pos, pos);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function insertShotMarker(idx) {
+  const el = document.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-shot`);
+  if (!el) return;
+  const shotNum = (el.value.match(/\[Shot\s*\d+\]/g) || []).length + 1;
+  let marker;
+  if (shotNum === 1) {
+    marker = '[Shot 1] ';
+  } else {
+    const sec = prompt(`Shot ${shotNum} 從第幾秒開始？（例如 7.5，這段總長由「分段長度」決定）`, '');
+    if (sec === null) return;
+    const s = parseFloat(sec);
+    if (isNaN(s) || s < 0) { alert('請輸入一個不小於 0 的秒數'); return; }
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = (s % 60).toFixed(3).padStart(6, '0');
+    marker = `[Shot ${shotNum}] At ${mm}:${ss}, `;
+  }
+  const prefix = el.value && !el.value.endsWith('\n') ? '\n' : '';
+  insertAtCursor(el, prefix + marker);
+}
+
+// musicInput shows a placeholder (like summaryInput) rather than a literal
+// "N/A" value sitting in the box - "N/A" and empty are the same thing to
+// the user, buildFullPrompt() re-inserts the literal "N/A" text at
+// prompt-build time regardless of which one the field holds.
+function normalizeMusicValue(v) {
+  const t = (v || '').trim();
+  return (!t || t.toUpperCase() === 'N/A') ? '' : t;
+}
+
+// non_diegetic_music should track whether a 背景音樂 file is actually
+// attached, same auto/manual pattern as subject_definitions (2026-09-02,
+// user reported the field not updating when bg music was uploaded): with
+// bg music present it auto-fills a default description; with none, it
+// stays empty. Only while the user hasn't hand-edited it away (dataset.auto).
+const DEFAULT_MUSIC_VALUE = 'the score follows the mood and rhythm of the reference track';
+function syncMusicInputToBgMusic() {
+  const el = document.getElementById('musicInput');
+  if (el.dataset.auto === 'false') return;
+  el.value = currentBgMusicFilename ? DEFAULT_MUSIC_VALUE : '';
+}
+
 function buildFullPrompt(row) {
   const subject = document.getElementById('subjectDefinitions').value.trim();
   const summary = document.getElementById('summaryInput').value.trim();
@@ -1291,108 +2026,579 @@ function buildFullPrompt(row) {
   return `subject_definitions:\n${subject}\n\nsummary: ${summary}\n\ndetailed_description:\n${detail}\n\noverall_soundscape: ${row.soundscape.trim()}\n\nnon_diegetic_music: ${music}`;
 }
 
+// Same 5 sections as buildFullPrompt(), plus retention_analysis spliced in
+// at its official position - buildFullPrompt() itself never included it
+// because the real submit path doesn't need it client-side (the backend
+// computes retention_analysis fresh from ref_image_roles/retention_level
+// and injects it during the Haiku rewrite - see prompt_rewriter.rewrite_
+// prompt()). The "檢視接線圖" preview never calls Haiku though, so without
+// this splice its Input Text node would be missing that whole section
+// (2026-09-03, user reported exactly that).
+function buildPreviewPrompt(row) {
+  const subject = document.getElementById('subjectDefinitions').value.trim();
+  const summary = document.getElementById('summaryInput').value.trim();
+  const retention = document.getElementById('retentionAnalysisPreview').value.trim() || 'N/A';
+  const music = document.getElementById('musicInput').value.trim() || 'N/A';
+  const detail = [row.shot.trim(), row.camera.trim() ? `Camera ${row.camera.trim().replace(/^camera\s*/i, '')}` : '']
+    .filter(Boolean).join('\n');
+  return `subject_definitions:\n${subject}\n\nsummary: ${summary}\n\nretention_analysis:\n${retention}\n\ndetailed_description:\n${detail}\n\noverall_soundscape: ${row.soundscape.trim()}\n\nnon_diegetic_music: ${music}`;
+}
+
 // liveSegments: optional array from a job status response ({status,
 // elapsed, started_at, output_file}) overlaid onto the input rows to
 // show progress + per-segment playback once generation has started.
+let lastLiveSegments = null; // cached so switchTab can re-render without wiping live progress when called with no args
 function renderSegmentCards(liveSegments) {
+  if (liveSegments !== undefined) lastLiveSegments = liveSegments;
   const container = document.getElementById('segmentCards');
   container.innerHTML = segmentRows.map((row, i) => {
-    const live = liveSegments && liveSegments[i];
+    const live = lastLiveSegments && lastLiveSegments[i];
     const pillClass = !live ? 'pending' : live.status;
     const pillText = !live ? '尚未送出'
       : live.status === 'done' ? '完成' : live.status === 'running' ? '生成中'
-      : live.status === 'error' ? '失敗' : '等待中';
-    let timeText = '';
-    let timeAttr = '';
-    if (live) {
-      if (live.elapsed != null) timeText = `${live.elapsed}s`;
-      else if (live.status === 'running' && live.started_at != null) {
-        timeText = `${(Date.now() / 1000 - live.started_at).toFixed(1)}s`;
-        timeAttr = ` data-started-at="${live.started_at}"`;
-      }
-    }
-    const playBtn = (live && live.status === 'done' && currentJobId)
-      ? `<button class="btn-download" data-play-seg="${i}" type="button" style="align-self:flex-start">▶ 播放這段</button>` : '';
+      : live.status === 'queued' ? '排隊中' : live.status === 'error' ? '失敗' : live.status === 'cancelled' ? '已停止' : '等待中';
     const disabled = formLocked ? 'disabled' : '';
-    const fieldLabel = (name, key) => !formLocked
-      ? `<span class="hint" data-tr-en="${key}:${i}" style="cursor:pointer;text-decoration:underline;font-size:10px">${name} 中→英</span>
-         <span class="hint" data-tr-zh="${key}:${i}" style="cursor:pointer;text-decoration:underline;font-size:10px">英→中</span>`
-      : `<span class="hint" style="font-size:10px">${name}</span>`;
+    const fieldLabel = (name) => `<span class="hint" style="font-size:10px">${name}</span>`;
+    const hasSnapshot = loadedSegmentRowsSnapshot[i] != null;
     return `<div class="seg-card" data-seg-idx="${i}">
       <div class="seg-card-head">
         <span class="seg-card-index">Seg ${i + 1}</span>
         <span class="pill ${pillClass}">${pillText}</span>
-        <span class="seg-time"${timeAttr}>${timeText}</span>
-        ${!formLocked ? `<span class="hint" data-translate-undo="${i}" style="cursor:pointer;text-decoration:underline;margin-left:auto">還原全部</span>` : ''}
+        ${!formLocked ? `<select class="ins-template-insert" data-idx="${i}" style="font-size:11px" title="選擇人數，直接把該範本插入這段的 Shot 內容/環境音欄位">
+          <option value="" selected disabled>+ 範本</option>
+          <option value="1">範本 (1人)</option>
+          <option value="2">範本 (2人)</option>
+          <option value="3">範本 (3人)</option>
+          <option value="multi">範本 (多人)</option>
+        </select>` : ''}
+        ${!formLocked && hasSnapshot ? `<button type="button" class="btn-download" data-restore-loaded="${i}" style="font-size:11px;padding:3px 8px">還原成載入文字</button>` : ''}
       </div>
+      ${!formLocked ? `<div class="seg-insert-bar">
+        <button type="button" class="btn-download" data-ins-shot="${i}" style="font-size:11px;padding:3px 8px">+ Shot</button>
+        <select class="ins-camera" data-idx="${i}" style="font-size:11px" title="插入到 Shot 內容游標處，可每個 shot 各自不同運鏡">
+          <option value="">+ 運鏡</option>
+          ${Object.entries(CAMERA_MOVEMENTS.reduce((acc, m) => { (acc[m.group] = acc[m.group] || []).push(m); return acc; }, {}))
+            .map(([g, items]) => `<optgroup label="${g}">${items.map(m => `<option value="${escapeAttr(m.en)}">${m.zh}</option>`).join('')}</optgroup>`).join('')}
+        </select>
+        <select class="ins-subject" data-idx="${i}" style="font-size:11px">
+          <option value="">+ 角色...</option>
+          <option value="&lt;Subject 1&gt;">&lt;Subject 1&gt;</option>
+          <option value="&lt;Subject 2&gt;">&lt;Subject 2&gt;</option>
+          <option value="&lt;Subject 3&gt;">&lt;Subject 3&gt;</option>
+        </select>
+        <select class="ins-speaker" data-idx="${i}" style="font-size:11px" title="說話者編號 (Sx)，緊接在 &lt;Subject N&gt; 後面，對白裡也要用同一個編號">
+          <option value="">+ 說話者...</option>
+          <option value="(S1)">(S1)</option>
+          <option value="(S2)">(S2)</option>
+          <option value="(S3)">(S3)</option>
+        </select>
+        <select class="ins-dialogue" data-idx="${i}" style="font-size:11px" title="插入「&lt;Subject N&gt; 動作 (Sx) says: &lt;d&gt;」完整一句，Subject 跟 Sx 編號一致，角色要真的清楚入鏡才適合用這個，不然用旁白">
+          <option value="">+ 對白...</option>
+          <option value="1">對白 (Subject 1)</option>
+          <option value="2">對白 (Subject 2)</option>
+          <option value="3">對白 (Subject 3)</option>
+        </select>
+        <button type="button" class="btn-download" data-ins-voiceover="${i}" style="font-size:11px;padding:3px 8px" title="旁白/畫外音，插入後記得改成正確的 (Sx)；官方規定要註明嘴巴沒在動">+ 旁白</button>
+        <button type="button" class="btn-download" data-ins-textblur="${i}" style="font-size:11px;padding:3px 8px" title="插入「背景招牌/文字虛焦」提示，避免招牌字亂碼">+ 文字虛焦</button>
+      </div>` : ''}
       <div class="seg-card-fields">
         <div>
-          ${fieldLabel('Shot 內容/台詞', 'shot')}
-          <textarea class="seg-shot" ${disabled} placeholder="[Shot 1] &lt;Subject 1&gt; ...動作... (S1) says &lt;d&gt;[English] 台詞&lt;/d&gt;">${escapeHtml(row.shot)}</textarea>
-        </div>
-        <div>
-          ${fieldLabel('Camera', 'camera')}
-          <input type="text" class="seg-camera" ${disabled} placeholder="運鏡描述" value="${escapeAttr(row.camera)}" />
-        </div>
-        <div>
-          ${fieldLabel('環境音', 'soundscape')}
+          ${fieldLabel('Shot 內容/台詞')}
+          <textarea class="seg-shot" ${disabled} placeholder="[Shot 1] &lt;Subject 1&gt; ...動作... (S1) says &lt;d&gt;[Chinese] 台詞&lt;/d&gt;">${escapeHtml(row.shot)}</textarea>
+          ${fieldLabel('環境音')}
           <input type="text" class="seg-soundscape" ${disabled} placeholder="這段的環境音" value="${escapeAttr(row.soundscape)}" />
+          <div class="seg-gen-row">
+            <button type="button" class="btn-download" data-seg-workflow-preview="${i}" style="font-size:11px;padding:4px 10px" title="下載這一段目前的 ComfyUI workflow json，拖進 ComfyUI 畫布看完整接線圖">🔌 接線圖</button>
+            <button type="button" class="btn-download" data-seg-generate="${i}" style="font-size:11px;padding:4px 10px"
+              ${(live && (live.status === 'running' || live.status === 'queued')) || !currentJobId || formLocked ? 'disabled' : ''}
+              ${!currentJobId ? 'title="這個專案還沒生成過，請先在下方送出整個生成"' : ''}
+              ${live && live.status === 'running' && live.started_at ? `data-seg-started-at="${live.started_at}"` : ''}
+              >${live && live.status === 'running' ? '生成中...' : live && live.status === 'queued' ? '排隊中...' : live && (live.status === 'done' || live.status === 'error' || live.status === 'cancelled') ? '重新生成' : '生成'}</button>
+            <button type="button" class="btn-download" data-seg-stop="${i}" style="font-size:11px;padding:4px 10px;${live && live.status === 'running' ? '' : 'display:none'}">停止</button>
+            <button type="button" class="btn-download" data-seg-unqueue="${i}" style="font-size:11px;padding:4px 10px;${live && live.status === 'queued' ? '' : 'display:none'}">取消排隊</button>
+            <input type="number" class="seg-seed-input" data-seg-seed="${i}" value="${segmentSeedInputs[i] != null ? segmentSeedInputs[i] : ''}" placeholder="seed（留白隨機）" title="這次生成/重新生成要用的 seed，留白就照原本規則（base seed + 段落序號）自動決定" style="width:120px;font-size:11px;padding:4px 6px" />
+          </div>
+        </div>
+        <div>
+          ${fieldLabel('生成結果')}
+          <div class="seg-video-slot ${live && live.status === 'done' ? 'has-video' : ''}" data-seg-video-slot="${i}">
+            ${live && live.status === 'done'
+              ? `<video muted preload="metadata" src="${mediaUrl(API + '/api/jobs/' + currentJobId + '/segments/' + i + '/video')}#t=0.1"></video>`
+              : `<span class="hint">${live && live.status === 'running' ? '生成中...' : live && live.status === 'queued' ? '排隊中...' : live && live.status === 'error' ? '生成失敗' : '尚未生成'}</span>`}
+          </div>
+          ${live && live.status === 'done' && live.seed != null ? `<div class="hint" style="font-size:10.5px;text-align:center;margin-top:3px">seed: ${live.seed}</div>` : ''}
         </div>
       </div>
-      ${playBtn}
     </div>`;
   }).join('');
 
   container.querySelectorAll('.seg-card').forEach(card => {
     const idx = parseInt(card.dataset.segIdx);
     const shotEl = card.querySelector('.seg-shot');
-    const camEl = card.querySelector('.seg-camera');
     const sndEl = card.querySelector('.seg-soundscape');
-    shotEl.addEventListener('input', () => segmentRows[idx].shot = shotEl.value);
-    camEl.addEventListener('input', () => segmentRows[idx].camera = camEl.value);
-    sndEl.addEventListener('input', () => segmentRows[idx].soundscape = sndEl.value);
-    [shotEl, camEl, sndEl].forEach(el => el.addEventListener('focus', () => activeSegmentIndex = idx));
+    // Any manual edit invalidates a previously-reviewed English version for
+    // this segment - buildFullPrompt() would no longer match what was
+    // reviewed, so let /api/generate fall back to a fresh rewrite instead
+    // of silently submitting stale reviewed text.
+    shotEl.addEventListener('input', () => { segmentRows[idx].shot = shotEl.value; delete reviewedPrompts[idx]; });
+    sndEl.addEventListener('input', () => { segmentRows[idx].soundscape = sndEl.value; delete reviewedPrompts[idx]; });
+    [shotEl, sndEl].forEach(el => el.addEventListener('focus', () => activeSegmentIndex = idx));
+    const seedEl = card.querySelector('.seg-seed-input');
+    if (seedEl) seedEl.addEventListener('input', () => { segmentSeedInputs[idx] = seedEl.value; });
   });
-  const fieldEl = (idx, key) => container.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-${key}`);
-  container.querySelectorAll('[data-tr-en]').forEach(el => el.addEventListener('click', () => {
-    const [key, idx] = el.dataset.trEn.split(':');
-    translateField(parseInt(idx), key, 'en');
+  container.querySelectorAll('[data-seg-generate]').forEach(el =>
+    el.addEventListener('click', () => generateSingleSegment(parseInt(el.dataset.segGenerate))));
+  container.querySelectorAll('[data-seg-stop]').forEach(el =>
+    el.addEventListener('click', async () => {
+      if (!currentJobId) return;
+      el.disabled = true;
+      await authFetch(`${API}/api/jobs/${currentJobId}/stop`, { method: 'POST' });
+    }));
+  container.querySelectorAll('[data-seg-unqueue]').forEach(el =>
+    el.addEventListener('click', async () => {
+      if (!currentJobId) return;
+      const idx = parseInt(el.dataset.segUnqueue);
+      el.disabled = true;
+      const res = await authFetch(`${API}/api/jobs/${currentJobId}/segments/${idx}/unqueue`, { method: 'POST' });
+      if (res.ok) {
+        const j = await authFetch(`${API}/api/jobs/${currentJobId}`).then(r => r.json());
+        renderSegmentCards(j.segments);
+      } else {
+        el.disabled = false;
+      }
+    }));
+  container.querySelectorAll('[data-seg-workflow-preview]').forEach(el =>
+    el.addEventListener('click', async () => {
+      const idx = parseInt(el.dataset.segWorkflowPreview);
+      const origLabel = el.textContent;
+      el.disabled = true;
+      el.textContent = '產生中...';
+      try {
+        const segments = await fetchWorkflowPreviews();
+        const match = segments.find(s => s.index === idx) || segments[idx];
+        if (!match) throw new Error('找不到這一段的資料');
+        downloadWorkflowJson(match.workflow, `h3-studio-seg${idx + 1}-workflow.json`);
+        window.open('http://127.0.0.1:8188', '_blank');
+      } catch (e) {
+        alert('產生失敗：' + e.message);
+      } finally {
+        el.disabled = false;
+        el.textContent = origLabel;
+      }
+    }));
+  container.querySelectorAll('[data-seg-video-slot].has-video').forEach(el => {
+    const idx = parseInt(el.dataset.segVideoSlot);
+    el.addEventListener('click', () => openVideoLightbox(
+      mediaUrl(API + '/api/jobs/' + currentJobId + '/segments/' + idx + '/video'), `Seg ${idx + 1}`));
+  });
+  container.querySelectorAll('[data-ins-shot]').forEach(el =>
+    el.addEventListener('click', () => insertShotMarker(parseInt(el.dataset.insShot))));
+  container.querySelectorAll('.ins-camera').forEach(el => el.addEventListener('change', () => {
+    // Inserts into the Shot textarea at the cursor so each [Shot N] can
+    // carry its own movement, matching the official guide's "camera
+    // instructions go in each shot's own sentence" rule. The old shared
+    // whole-segment Camera field was removed (2026-08-25) now that this is
+    // the only way to set camera movement.
+    if (!el.value) return;
+    const idx = parseInt(el.dataset.idx);
+    const shotEl = container.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-shot`);
+    const pos = shotEl.selectionStart ?? shotEl.value.length;
+    const before = shotEl.value.slice(0, pos);
+    // Avoid gluing the inserted clause straight onto the preceding text
+    // with no separator (e.g. "...散步,camera slowly orbits...") when the
+    // cursor sits right after non-punctuation.
+    const needsSep = before && !/[\s,，.。;；]$/.test(before);
+    insertAtCursor(shotEl, (needsSep ? ', ' : '') + el.value);
+    el.value = '';
   }));
-  container.querySelectorAll('[data-tr-zh]').forEach(el => el.addEventListener('click', () => {
-    const [key, idx] = el.dataset.trZh.split(':');
-    translateField(parseInt(idx), key, 'zh-TW');
+  container.querySelectorAll('.ins-subject').forEach(el => el.addEventListener('change', () => {
+    if (!el.value) return;
+    const idx = parseInt(el.dataset.idx);
+    const shotEl = container.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-shot`);
+    insertAtCursor(shotEl, el.value + ' ');
+    el.value = '';
   }));
-  container.querySelectorAll('[data-translate-undo]').forEach(el =>
-    el.addEventListener('click', () => resetRowLang(parseInt(el.dataset.translateUndo))));
-  container.querySelectorAll('[data-play-seg]').forEach(el =>
-    el.addEventListener('click', () => showSegmentVideo(currentJobId, parseInt(el.dataset.playSeg))));
+  container.querySelectorAll('.ins-speaker').forEach(el => el.addEventListener('change', () => {
+    // (Sx) sits right after <Subject N> per the guide's dialogue format -
+    // insert at cursor same as the Subject dropdown, not auto-attached to
+    // it, since the two clicks can happen in either order.
+    if (!el.value) return;
+    const idx = parseInt(el.dataset.idx);
+    const shotEl = container.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-shot`);
+    insertAtCursor(shotEl, el.value + ' ');
+    el.value = '';
+  }));
+  container.querySelectorAll('.ins-dialogue').forEach(el => el.addEventListener('change', () => {
+    // Inserts the full "<Subject N> 動作 (Sx) says: <d>...</d>" line in one
+    // go (2026-08-26) - not just the (Sx) says:/<d> part. The old two-step
+    // flow (insert (Sx), then separately insert bare <d>...</d>, with
+    // "says:" typed by hand) was the source of two different mismatches:
+    // missing "says:", and - worse - a shot mentioning one <Subject N> but
+    // attributing the line to a differently-numbered (Sx), which reads as
+    // an unseen/undeclared speaker and has been a real cause of garbled
+    // lip-synced audio. Pairing them here (same N for both tags) covers
+    // the common case; the docs already cover the off-screen-speaker case
+    // (+ 旁白) for when they genuinely differ.
+    if (!el.value) return;
+    const idx = parseInt(el.dataset.idx);
+    const shotEl = container.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-shot`);
+    const text = `<Subject ${el.value}> [動作] (S${el.value}) says: <d>[Chinese] </d>`;
+    insertAtCursor(shotEl, text, `<Subject ${el.value}> [動作] (S${el.value}) says: <d>[Chinese] `.length);
+    el.value = '';
+  }));
+  container.querySelectorAll('[data-ins-voiceover]').forEach(el => el.addEventListener('click', () => {
+    // Official base-guide format (2026-08-25): voice-over still uses <d>,
+    // still needs a speaker ID, but the action text must say "off-screen
+    // voiceover" and explicitly state the lips stay closed - that's the
+    // only thing distinguishing it from lip-synced dialogue, the tag alone
+    // doesn't. Defaults to (S1); the user retypes the number if it's a
+    // different speaker.
+    const idx = parseInt(el.dataset.insVoiceover);
+    const shotEl = container.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-shot`);
+    const text = '(S1) says in an off-screen voiceover: <d>[Chinese] </d>, lips remain completely closed.';
+    insertAtCursor(shotEl, text, '(S1) says in an off-screen voiceover: <d>[Chinese] '.length);
+  }));
+  container.querySelectorAll('[data-ins-textblur]').forEach(el => el.addEventListener('click', () => {
+    // Always appends at the true end of the field rather than the cursor -
+    // this is a whole-scene note, not a point insertion, and inserting it
+    // at the cursor risked landing mid-tag (e.g. inside a just-inserted
+    // <d>...</d> the user hasn't typed into yet), corrupting the syntax.
+    const idx = parseInt(el.dataset.insTextblur);
+    const shotEl = container.querySelector(`.seg-card[data-seg-idx="${idx}"] .seg-shot`);
+    const trimmed = shotEl.value.trimEnd();
+    // On its own blank line rather than tacked onto the last shot's
+    // sentence - it's a whole-scene note, not part of any one shot's
+    // action, so it reads clearer set apart (2026-08-26, was previously
+    // appended inline with a '. ' separator that also broke on
+    // Chinese-ending text: '.' doesn't match a shot ending in 。).
+    const sep = trimmed ? '\n\n' : '';
+    shotEl.value = trimmed + sep + TEXT_BLUR_HINT + '.';
+    shotEl.dispatchEvent(new Event('input', { bubbles: true }));
+    shotEl.focus();
+    shotEl.setSelectionRange(shotEl.value.length, shotEl.value.length);
+  }));
+  container.querySelectorAll('.ins-template-insert').forEach(el => el.addEventListener('change', () => {
+    const idx = parseInt(el.dataset.idx);
+    const cat = el.value;
+    el.selectedIndex = 0; // reset to the "+ 範本" placeholder, ready for next use
+    if (!cat) return;
+    const card = container.querySelector(`.seg-card[data-seg-idx="${idx}"]`);
+    const tpl = BUILTIN_TEMPLATES[cat] && BUILTIN_TEMPLATES[cat][0];
+    if (!tpl) return;
+    const m = tpl.content.match(/^Shot 內容\/台詞:\n([\s\S]*?)\n\n環境音:\n([\s\S]*)$/);
+    if (!m) return;
+    const [, shotPart, soundPart] = m;
+    const shotEl = card.querySelector('.seg-shot');
+    const sndEl = card.querySelector('.seg-soundscape');
+    const shotPrefix = shotEl.value && !shotEl.value.endsWith('\n') ? '\n' : '';
+    shotEl.value = shotEl.value + shotPrefix + shotPart;
+    shotEl.dispatchEvent(new Event('input', { bubbles: true }));
+    sndEl.value = sndEl.value ? `${sndEl.value}；${soundPart}` : soundPart;
+    sndEl.dispatchEvent(new Event('input', { bubbles: true }));
+  }));
+  container.querySelectorAll('[data-restore-loaded]').forEach(el =>
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.dataset.restoreLoaded);
+      const snap = loadedSegmentRowsSnapshot[idx];
+      if (!snap) return;
+      if (!confirm(`確定要把 Seg ${idx + 1} 還原成上次載入專案時的內容？現在的修改會被蓋掉。`)) return;
+      segmentRows[idx] = { ...snap };
+      delete reviewedPrompts[idx];
+      renderSegmentCards();
+    }));
 }
 
-document.getElementById('segPreviewToggleHint').addEventListener('click', () => {
-  const box = document.getElementById('segPreviewBox');
-  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
-  box.textContent = segmentRows.map((row, i) => `── Seg ${i + 1} ──\n${buildFullPrompt(row)}`).join('\n\n') || '尚未有分段內容';
-  box.style.display = 'block';
+// Inline "改 prompt -> 重新生成這一段" flow, lives on the Prompt 輸入 tab's
+// segment card itself instead of the 生成 tab's "重新產生此段" (which only
+// replays the frozen prompt from whenever the job was first submitted -
+// see /api/jobs/{id}/segments/{index}/regenerate's `prompt` override,
+// 2026-08-26). Re-runs the same Haiku rewrite /api/generate does, but
+// scoped to just this one segment's current draft, then sends that as the
+// override so the regenerate actually reflects the edit.
+async function generateSingleSegment(idx) {
+  if (!currentJobId) { alert('這個專案還沒生成過，請先在下方送出整個生成'); return; }
+  const btn = document.querySelector(`[data-seg-generate="${idx}"]`);
+  if (!btn || btn.disabled) return;
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Haiku 轉換中...';
+  try {
+    const refImageNames = selectedRefLibraryImages.map(x => x.filename);
+    const refImageRoles = selectedRefLibraryImages.map(x => ({ role: x.role || 'subject', shot: x.shot, frame_type: x.frameType }));
+    const refAudioNameForPreview = currentRefAudioFilename || (selectedVoiceProfile ? selectedVoiceProfile.comfy_filename : '');
+    const fd = new FormData();
+    fd.append('segment_prompts', JSON.stringify([buildFullPrompt(segmentRows[idx])]));
+    fd.append('ref_image_filenames', JSON.stringify(refImageNames));
+    fd.append('ref_image_roles', JSON.stringify(refImageRoles));
+    fd.append('ref_audio_filename', refAudioNameForPreview);
+    fd.append('segment_length_seconds', document.getElementById('segmentLength').value);
+    fd.append('retention_level', document.getElementById('retentionLevelSelect').value);
+    const previewRes = await authFetch(`${API}/api/prompt/preview`, { method: 'POST', body: fd });
+    const previewBody = await previewRes.json();
+    if (!previewRes.ok) throw new Error(previewBody.error || 'Prompt 轉換失敗');
+    const freshPrompt = (previewBody.rewritten || [])[0];
+    if (!freshPrompt) throw new Error('Haiku 沒有回傳結果');
+
+    const fd2 = new FormData();
+    fd2.append('prompt', freshPrompt);
+    fd2.append('ref_image_filenames', JSON.stringify(refImageNames));
+    const seedInput = document.querySelector(`[data-seg-seed="${idx}"]`);
+    if (seedInput && seedInput.value.trim()) fd2.append('seed', seedInput.value.trim());
+    const res = await authFetch(`${API}/api/jobs/${currentJobId}/segments/${idx}/regenerate`, { method: 'POST', body: fd2 });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '重新產生失敗');
+    pollSegmentRegenerate(currentJobId, idx);
+  } catch (e) {
+    alert('生成失敗：' + e.message);
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+
+// Deliberately separate from pollJob() (the 開始生成 button's poller) -
+// that one jumps to the 生成 tab and drives the big button's own state on
+// completion, which would yank the user away from the Prompt 輸入 tab
+// they're actively editing in. This just keeps the one segment card (and
+// the read-only 生成 tab view, if the user later checks it) in sync.
+let segRegenPollTimer = null;
+function pollSegmentRegenerate(jobId, idx) {
+  if (segRegenPollTimer) clearInterval(segRegenPollTimer);
+  segRegenPollTimer = setInterval(async () => {
+    const res = await authFetch(`${API}/api/jobs/${jobId}`);
+    if (!res.ok) { clearInterval(segRegenPollTimer); return; }
+    const j = await res.json();
+    // Deliberately NOT a full renderSegmentCards() on every tick - that
+    // rebuilds every card's innerHTML including <video> elements, which
+    // makes every OTHER already-finished segment's video visibly reload/
+    // flash every 2s while just one segment is regenerating (2026-08-26,
+    // reported by the user). Only patch the one card actually in flight;
+    // lastLiveSegments still gets updated so a later full re-render (tab
+    // switch, project reload, etc.) reflects the true state.
+    lastLiveSegments = j.segments;
+    const seg = j.segments[idx];
+    if (seg) patchSegmentCardLiveState(idx, seg);
+    if (currentJobId === jobId) {
+      lastJobResponse = j;
+      renderGenerateResultCards(j);
+      updateJobActionBar(j);
+    }
+    const segStatus = seg && seg.status;
+    // Keep polling through 'queued' too - a queued segment isn't done yet,
+    // it just hasn't been picked up by _process_pending_regenerates() on
+    // the backend (see 2026-08-26 sequential-queue feature).
+    if (segStatus !== 'running' && segStatus !== 'queued' && j.status !== 'running') {
+      clearInterval(segRegenPollTimer);
+      renderSegmentCards(j.segments); // now safe: swap in the finished result once, not every tick
+      if (segStatus === 'error') {
+        document.getElementById('errorMsg').innerHTML = `<div class="msg error">Seg ${idx + 1} 生成失敗：${j.error || '未知錯誤'}</div>`;
+      }
+      refreshJobHistory();
+    }
+  }, 2000);
+}
+
+// ---------- "生成" tab: read-only view of what was actually submitted
+// (2026-08-25) - separate from the editable draft cards above, since after
+// a job is sent this tab's job is confirming results, not editing. Fed by
+// the same /api/jobs/{id} responses pollJob()/resumeActiveJob()/job-history
+// already fetch - lastJobResponse just caches the latest one so switching
+// back to this tab doesn't need its own extra fetch. ----------
+let lastJobResponse = null;
+function renderGenerateResultCards(jobData) {
+  const container = document.getElementById('generateResultCards');
+  if (!jobData || !jobData.segments || !jobData.segments.length) {
+    container.innerHTML = '<div class="empty-state">尚未送出生成</div>';
+    return;
+  }
+  const prompts = (jobData.segment_prompts && jobData.segment_prompts.length) ? jobData.segment_prompts : [jobData.prompt];
+  const jobBusy = ['queued', 'running', 'concatenating'].includes(jobData.status);
+  container.innerHTML = jobData.segments.map((seg, i) => {
+    const pillText = seg.status === 'done' ? '完成' : seg.status === 'running' ? '生成中' : seg.status === 'error' ? '失敗' : seg.status === 'cancelled' ? '已停止' : '等待中';
+    const playBtn = (seg.status === 'done' && currentJobId)
+      ? `<button class="btn-download" data-play-seg="${i}" type="button">▶ 播放</button>`
+      : `<span class="hint">${seg.status === 'error' ? '失敗' : seg.status === 'cancelled' ? '已停止' : '尚未完成'}</span>`;
+    // Regenerating just this one segment is available any time the job
+    // isn't actively working on something (whether the segment itself
+    // succeeded, failed, or was never reached) - 2026-08-25, so a bad
+    // segment doesn't force redoing the whole job.
+    const regenBtn = (!jobBusy && currentJobId)
+      ? `<button class="btn-download" data-regen-seg="${i}" type="button" style="font-size:11px">重新產生此段</button>`
+      : '';
+    return `<div class="seg-card">
+      <div class="seg-card-head">
+        <span class="seg-card-index">Seg ${i + 1}</span>
+        <span class="pill ${seg.status}">${pillText}</span>
+        ${seg.elapsed != null ? `<span class="seg-time">${seg.elapsed}s</span>` : ''}
+      </div>
+      <div class="gen-result-row">
+        <textarea class="gen-result-prompt" readonly>${escapeHtml(prompts[i] || '')}</textarea>
+        <div class="gen-result-play">${playBtn}${regenBtn}</div>
+      </div>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('[data-play-seg]').forEach(el =>
+    el.addEventListener('click', () => {
+      showSegmentVideo(currentJobId, parseInt(el.dataset.playSeg));
+      document.getElementById('playbackArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+  container.querySelectorAll('[data-regen-seg]').forEach(el =>
+    el.addEventListener('click', async () => {
+      const idx = parseInt(el.dataset.regenSeg);
+      if (!confirm(`確定要重新產生 Seg ${idx + 1}？會覆蓋這一段目前的結果，需要重新花 GPU 時間。`)) return;
+      el.disabled = true;
+      el.textContent = '送出中...';
+      try {
+        const res = await authFetch(`${API}/api/jobs/${currentJobId}/segments/${idx}/regenerate`, { method: 'POST' });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || '重新產生失敗');
+        localStorage.setItem(ACTIVE_JOB_KEY, currentJobId);
+        formLocked = true;
+        document.getElementById('generateBtn').disabled = true;
+        document.getElementById('generateBtn').textContent = '生成中...';
+        showStopButton();
+        document.getElementById('jobActionBar').style.display = 'none';
+        pollJob(currentJobId, document.getElementById('generateBtn'));
+      } catch (e) {
+        document.getElementById('errorMsg').innerHTML = `<div class="msg error">${e.message}</div>`;
+        el.disabled = false;
+        el.textContent = '重新產生此段';
+      }
+    }));
+}
+
+// Highlights the structural markers (shot/timestamp/speaker/tag/reference
+// keywords) inside the official-format prompt text so they're scannable at
+// a glance in the review modal - text is HTML-escaped first, keyword
+// patterns are matched against the escaped form so raw <, > in the source
+// never gets treated as real markup.
+const _KW_PATTERN = /(\[Shot\s*\d+\]|At\s+\d{2}:\d{2}(?:\.\d{3})?,|\(S\d+\)|&lt;\/?d&gt;|&lt;Subject\s*\d+&gt;|&lt;Picture\s*\d+&gt;|&lt;Audio\s*\d+&gt;|&lt;Video\s*\d+&gt;|\[[A-Za-z][A-Za-z-]*\]|\bCamera\b)/g;
+function highlightPromptKeywords(text) {
+  return escapeHtml(text).replace(_KW_PATTERN, '<b class="kw">$1</b>');
+}
+
+function openPromptReviewModal() {
+  document.getElementById('promptReviewModal').style.display = 'flex';
+}
+function closePromptReviewModal() {
+  document.getElementById('promptReviewModal').style.display = 'none';
+}
+document.getElementById('promptReviewCloseBtn').addEventListener('click', closePromptReviewModal);
+document.getElementById('promptReviewModal').addEventListener('click', (e) => {
+  if (e.target.id === 'promptReviewModal') closePromptReviewModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('promptReviewModal').style.display !== 'none') closePromptReviewModal();
 });
 
-// ---------- Shared-field translate ----------
-async function translateSharedField(elId, target) {
-  const el = document.getElementById(elId);
-  if (!el.value.trim()) return;
-  if (el.dataset.original == null) el.dataset.original = el.value;
-  el.value = await translateText(el.value, target);
+function openAiGenerateModal() {
+  document.getElementById('aiGenerateModal').style.display = 'flex';
 }
-document.getElementById('translateSharedEn').addEventListener('click', () => translateSharedField('summaryInput', 'en'));
-document.getElementById('translateSharedZh').addEventListener('click', () => translateSharedField('summaryInput', 'zh-TW'));
+function closeAiGenerateModal() {
+  document.getElementById('aiGenerateModal').style.display = 'none';
+}
+document.getElementById('aiGenerateOpenBtn').addEventListener('click', openAiGenerateModal);
+document.getElementById('aiGenerateModalCloseBtn').addEventListener('click', closeAiGenerateModal);
+document.getElementById('aiGenerateModal').addEventListener('click', (e) => {
+  if (e.target.id === 'aiGenerateModal') closeAiGenerateModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('aiGenerateModal').style.display !== 'none') closeAiGenerateModal();
+});
+
+function openImageLightbox(src, title) {
+  document.getElementById('imageLightboxImg').src = src;
+  document.getElementById('imageLightboxTitle').textContent = title || '';
+  document.getElementById('imageLightboxModal').style.display = 'flex';
+}
+function closeImageLightbox() {
+  document.getElementById('imageLightboxModal').style.display = 'none';
+  document.getElementById('imageLightboxImg').src = '';
+}
+document.getElementById('imageLightboxCloseBtn').addEventListener('click', closeImageLightbox);
+document.getElementById('imageLightboxModal').addEventListener('click', (e) => {
+  if (e.target.id === 'imageLightboxModal') closeImageLightbox();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('imageLightboxModal').style.display !== 'none') closeImageLightbox();
+});
+
+function openVideoLightbox(src, title) {
+  const v = document.getElementById('videoLightboxVideo');
+  v.src = src;
+  document.getElementById('videoLightboxTitle').textContent = title || '';
+  document.getElementById('videoLightboxModal').style.display = 'flex';
+}
+function closeVideoLightbox() {
+  const v = document.getElementById('videoLightboxVideo');
+  v.pause();
+  v.src = '';
+  document.getElementById('videoLightboxModal').style.display = 'none';
+}
+document.getElementById('videoLightboxCloseBtn').addEventListener('click', closeVideoLightbox);
+document.getElementById('videoLightboxModal').addEventListener('click', (e) => {
+  if (e.target.id === 'videoLightboxModal') closeVideoLightbox();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('videoLightboxModal').style.display !== 'none') closeVideoLightbox();
+});
+
+// Runs the exact same draft -> official-format rewrite /api/generate does
+// (via /api/prompt/preview, no job/ComfyUI involved), so the user can read
+// and, if needed, hand-tweak the English text Haiku actually produced
+// before spending GPU time on it. An "套用" edit is remembered per segment
+// and used verbatim at submit time - see the reviewedPrompts invalidation
+// in renderSegmentCards' field listeners for why it's draft-snapshotted.
+document.getElementById('segReviewEnBtn').addEventListener('click', async () => {
+  const box = document.getElementById('segReviewEnBox');
+  openPromptReviewModal();
+  if (!segmentRows.length || !segmentRows.some(r => r.shot.trim())) {
+    box.innerHTML = '<div class="hint">尚未有分段內容</div>';
+    return;
+  }
+  box.innerHTML = '<div class="hint">Haiku 轉換中...</div>';
+  const segPrompts = segmentRows.map(buildFullPrompt);
+  const refImageNames = selectedRefLibraryImages.map(x => x.filename);
+  const refImageRoles = selectedRefLibraryImages.map(x => ({ role: x.role || 'subject', shot: x.shot, frame_type: x.frameType }));
+  const refAudioNameForPreview = currentRefAudioFilename || (selectedVoiceProfile ? selectedVoiceProfile.comfy_filename : '');
+  const fd = new FormData();
+  fd.append('segment_prompts', JSON.stringify(segPrompts));
+  fd.append('ref_image_filenames', JSON.stringify(refImageNames));
+  fd.append('ref_image_roles', JSON.stringify(refImageRoles));
+  fd.append('ref_audio_filename', refAudioNameForPreview);
+  fd.append('segment_length_seconds', document.getElementById('segmentLength').value);
+  fd.append('retention_level', document.getElementById('retentionLevelSelect').value);
+  try {
+    const res = await authFetch(`${API}/api/prompt/preview`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '轉換失敗');
+    box.innerHTML = data.rewritten.map((en, i) => `
+      <div class="field" style="margin-bottom:14px">
+        <div class="field-label"><span>Seg ${i + 1}</span>
+          <span class="hint" data-review-apply="${i}" style="cursor:pointer;text-decoration:underline">套用（提交時直接用這版，略過重新翻譯）</span>
+        </div>
+        <div class="review-en-text kw-box mono" contenteditable="true" data-idx="${i}">${highlightPromptKeywords(en)}</div>
+      </div>
+    `).join('');
+    box.querySelectorAll('[data-review-apply]').forEach(el => el.addEventListener('click', () => {
+      const idx = parseInt(el.dataset.reviewApply);
+      const div = box.querySelector(`.review-en-text[data-idx="${idx}"]`);
+      reviewedPrompts[idx] = { draftSnapshot: segPrompts[idx], english: div.innerText };
+      el.textContent = '已套用 ✓';
+    }));
+  } catch (e) {
+    box.innerHTML = `<div class="msg error">${e.message}</div>`;
+  }
+});
 
 // ---------- Playback area: one shared player, defaults to the combined
 // final video, per-segment "play" buttons swap what it shows ----------
 function showCombinedVideo(jobId) {
   document.getElementById('playbackLabel').textContent = '完整合併影片';
   document.getElementById('playbackArea').innerHTML = `
-    <video controls autoplay src="${mediaUrl(API + '/api/jobs/' + jobId + '/video')}"></video>
+    <video controls src="${mediaUrl(API + '/api/jobs/' + jobId + '/video')}"></video>
     <div style="margin-top:10px"><a class="btn-download" href="${mediaUrl(API + '/api/jobs/' + jobId + '/video')}" download>下載完整影片</a></div>
   `;
+  document.getElementById('playbackArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ---------- Post-production (3-track timeline: video / original audio /
@@ -1707,7 +2913,7 @@ document.getElementById('durationMinutes').addEventListener('input', updateHints
 document.getElementById('segmentLength').addEventListener('input', updateHints);
 updateHints();
 
-for (const group of [document.getElementById('resToggle'), document.getElementById('fpsToggle')]) {
+for (const group of [document.getElementById('resToggle'), document.getElementById('fpsToggle'), document.getElementById('stepsToggle')]) {
   group.addEventListener('click', (e) => {
     const opt = e.target.closest('.toggle-opt');
     if (!opt) return;
@@ -1724,6 +2930,80 @@ async function uploadFile(file, kind) {
   const j = await res.json();
   return j.filename;
 }
+
+// ---------- Ad-hoc media (ref audio / bg music / ref video): uploaded as
+// soon as picked (not at generate-time) so there's a stable server-side
+// filename to persist into project save/load, same idea as the ref-image
+// library's "upload once, reuse the name" pattern. ----------
+let currentRefAudioFilename = null;
+let currentBgMusicFilename = null;
+let currentRefVideoFilename = null;
+// The server-side filename (currentXFilename above) is a randomized
+// storage name, not what the user actually picked - it was the only thing
+// ever persisted, so after a save/reload the hint showed that random
+// string instead of a recognizable name (2026-08-26, reported by the
+// user). These hold the ORIGINAL filename purely for display.
+let currentRefAudioOriginalName = null;
+let currentBgMusicOriginalName = null;
+let currentRefVideoOriginalName = null;
+
+document.getElementById('refAudio').addEventListener('change', async (e) => {
+  const hint = document.getElementById('refAudioHint');
+  if (!e.target.files.length) { currentRefAudioFilename = null; currentRefAudioOriginalName = null; hint.textContent = ''; return; }
+  hint.textContent = '上傳中...';
+  try {
+    currentRefAudioFilename = await uploadFile(e.target.files[0], 'audio');
+    currentRefAudioOriginalName = e.target.files[0].name;
+    hint.textContent = `已上傳：${currentRefAudioOriginalName}`;
+  } catch (err) {
+    hint.textContent = '上傳失敗';
+    currentRefAudioFilename = null;
+    currentRefAudioOriginalName = null;
+  }
+});
+document.getElementById('bgMusic').addEventListener('change', async (e) => {
+  const hint = document.getElementById('bgMusicHint');
+  const hintPrompt = document.getElementById('bgMusicHintPrompt');
+  if (!e.target.files.length) {
+    currentBgMusicFilename = null; currentBgMusicOriginalName = null;
+    hint.textContent = ''; hintPrompt.textContent = '';
+    syncMusicInputToBgMusic();
+    return;
+  }
+  hint.textContent = '上傳中...';
+  hintPrompt.textContent = '上傳中...';
+  try {
+    currentBgMusicFilename = await uploadFile(e.target.files[0], 'music');
+    currentBgMusicOriginalName = e.target.files[0].name;
+    // The file (背景音樂 upload) lives on the 專案內容 tab, but the text
+    // description of its mood (non_diegetic_music) is on Prompt 輸入 - 2026
+    // -08-26, the user couldn't see confirmation of the upload without
+    // switching tabs, so this mirrors the same status text into both.
+    hint.textContent = `已上傳：${currentBgMusicOriginalName}`;
+    hintPrompt.textContent = `已上傳：${currentBgMusicOriginalName}`;
+    syncMusicInputToBgMusic();
+  } catch (err) {
+    hint.textContent = '上傳失敗';
+    hintPrompt.textContent = '上傳失敗';
+    currentBgMusicFilename = null;
+    currentBgMusicOriginalName = null;
+    syncMusicInputToBgMusic();
+  }
+});
+document.getElementById('refVideo').addEventListener('change', async (e) => {
+  const hint = document.getElementById('refVideoHint');
+  if (!e.target.files.length) { currentRefVideoFilename = null; currentRefVideoOriginalName = null; hint.textContent = ''; return; }
+  hint.textContent = '上傳中...';
+  try {
+    currentRefVideoFilename = await uploadFile(e.target.files[0], 'video');
+    currentRefVideoOriginalName = e.target.files[0].name;
+    hint.textContent = `已上傳：${currentRefVideoOriginalName}`;
+  } catch (err) {
+    hint.textContent = '上傳失敗';
+    currentRefVideoFilename = null;
+    currentRefVideoOriginalName = null;
+  }
+});
 
 let pollTimer = null;
 const ACTIVE_JOB_KEY = "h3studio_active_job_id";
@@ -1743,36 +3023,48 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     }
     const segPrompts = segmentRows.map(buildFullPrompt);
 
-    // Library picks first (already sitting in ComfyUI's input/ dir under
-    // a stable filename - no re-upload needed), then fill any remaining
-    // slots with freshly uploaded files, capped at 3 total.
+    // Reference images only come from the library now (selection UI
+    // enforces the 3-person cap already) - already sitting in ComfyUI's
+    // input/ dir under a stable filename, no re-upload needed.
     const refImageNames = selectedRefLibraryImages.map(x => x.filename);
-    const imageFiles = document.getElementById('refImages').files;
-    for (let i = 0; i < imageFiles.length && refImageNames.length < 3; i++) {
-      refImageNames.push(await uploadFile(imageFiles[i], 'image'));
+    // refAudio/bgMusic/refVideo are uploaded as soon as picked (see the
+    // 'change' listeners above), so just read the already-resolved names.
+    const refAudioName = currentRefAudioFilename || (selectedVoiceProfile ? selectedVoiceProfile.comfy_filename : '');
+    const bgMusicName = currentBgMusicFilename || '';
+    const refVideoName = currentRefVideoFilename || '';
+
+    // 2026-08-23 incident: a generation went out with <Picture 1> in the
+    // prompt template but no actual reference image attached (selection got
+    // cleared by "新增", template text didn't reflect it) - the model had
+    // nothing to anchor identity to and silently produced a wrong face
+    // instead of erroring. Block that combination before it wastes a ~10min
+    // generation instead of catching it after the fact.
+    const combinedPromptText = segPrompts.join('\n');
+    if (/<Picture\s*\d*>/i.test(combinedPromptText) && refImageNames.length === 0) {
+      throw new Error('提示詞裡引用了 <Picture>，但沒有附上任何參考圖片 - 請先選圖或上傳，或把提示詞裡的 Picture 參考拿掉');
     }
-    let refAudioName = '';
-    if (document.getElementById('refAudio').files.length) {
-      refAudioName = await uploadFile(document.getElementById('refAudio').files[0], 'audio');
-    } else if (selectedVoiceProfile) {
-      refAudioName = selectedVoiceProfile.comfy_filename;
-    }
-    let bgMusicName = '';
-    if (document.getElementById('bgMusic').files.length) {
-      bgMusicName = await uploadFile(document.getElementById('bgMusic').files[0], 'music');
-    }
-    let refVideoName = '';
-    if (document.getElementById('refVideo').files.length) {
-      refVideoName = await uploadFile(document.getElementById('refVideo').files[0], 'video');
-    }
+    // <d> dialogue without a reference voice used to be blocked here too
+    // (same 2026-08-23 incident), but 2026-08-25: intentionally relaxed on
+    // user request - dialogue/narration without any voice reference is a
+    // legitimate case (the model picks its own voice), not just a stale-
+    // selection mistake like the Picture case above.
 
     const resOpt = document.querySelector('#resToggle .toggle-opt.on');
     const fpsOpt = document.querySelector('#fpsToggle .toggle-opt.on');
+    const stepsOpt = document.querySelector('#stepsToggle .toggle-opt.on');
 
     btn.textContent = '送出生成中...';
+    // A segment whose reviewed English still matches its current draft
+    // (see the 中/英 review panel above) is sent verbatim; everything else
+    // is null so the backend does its normal Haiku rewrite.
+    const promptOverrides = segmentRows.map((row, i) => {
+      const rev = reviewedPrompts[i];
+      return (rev && rev.draftSnapshot === segPrompts[i]) ? rev.english : null;
+    });
     const fd = new FormData();
     fd.append('prompt', segPrompts[0] || '');
     fd.append('segment_prompts', JSON.stringify(segPrompts));
+    fd.append('prompt_overrides', JSON.stringify(promptOverrides));
     fd.append('ref_image_filenames', JSON.stringify(refImageNames));
     fd.append('ref_audio_filename', refAudioName);
     fd.append('bg_music_filename', bgMusicName);
@@ -1785,6 +3077,14 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     fd.append('output_width', resOpt.dataset.w);
     fd.append('output_height', resOpt.dataset.h);
     fd.append('output_fps', fpsOpt.dataset.fps);
+    fd.append('steps', stepsOpt.dataset.steps);
+    const seedVal = document.getElementById('seedInput').value.trim();
+    if (seedVal) fd.append('seed', seedVal);
+    fd.append('ref_image_size', document.getElementById('refImageSizeSelect').value);
+    fd.append('retention_level', document.getElementById('retentionLevelSelect').value);
+    fd.append('ref_image_roles', JSON.stringify(selectedRefLibraryImages.map(x => ({ role: x.role || 'subject', shot: x.shot, frame_type: x.frameType }))));
+    const runUpToVal = document.getElementById('runUpToSegmentInput').value.trim();
+    if (runUpToVal) fd.append('run_up_to_segment', runUpToVal);
 
     const res = await authFetch(`${API}/api/generate`, { method: 'POST', body: fd });
     const body = await res.json();
@@ -1792,10 +3092,17 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     const { job_id } = body;
     localStorage.setItem(ACTIVE_JOB_KEY, job_id);
     currentJobId = job_id;
+    if (!projectJobIds.includes(job_id)) projectJobIds.push(job_id);
     formLocked = true;
     renderSegmentCards();
-    switchTab('right', 'generate');
+    lastJobResponse = null; // full data isn't fetched yet - pollJob's first tick fills this in momentarily
+    // Jump to the segment actually generating (always Seg 1 on a fresh
+    // submit) instead of the 生成 tab - 2026-08-26, the user wants to
+    // watch it happen on the Prompt 輸入 tab, not the read-only summary.
+    switchTab('right', 'prompt');
+    document.querySelector('.seg-card[data-seg-idx="0"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     btn.textContent = '生成中...';
+    showStopButton();
     pollJob(job_id, btn);
     refreshJobHistory();
   } catch (e) {
@@ -1805,15 +3112,165 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
   }
 });
 
-// Ticks running-segment timers every second, independent of the 4s poll
-// interval, so the elapsed time visibly counts up while a segment runs.
+// ---------- Stop button: interrupts ComfyUI's current computation and
+// tells _run_job to release this run's scratch files (extracted frames,
+// trimmed audio) instead of continuing to the next segment. Already
+// -completed segments in this job stay - they're real output. ----------
+function showStopButton() {
+  const btn = document.getElementById('stopBtn');
+  btn.style.display = '';
+  btn.disabled = false;
+  btn.textContent = '■ 停止';
+}
+function hideStopButton() {
+  document.getElementById('stopBtn').style.display = 'none';
+}
+document.getElementById('stopBtn').addEventListener('click', async () => {
+  if (!currentJobId) return;
+  const btn = document.getElementById('stopBtn');
+  btn.disabled = true;
+  btn.textContent = '停止中...';
+  try {
+    const res = await authFetch(`${API}/api/jobs/${currentJobId}/stop`, { method: 'POST' });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '停止失敗');
+    // pollJob's next tick picks up status: 'cancelled' and does the actual
+    // cleanup (unlocking the form, hiding this button, refreshing history).
+  } catch (e) {
+    document.getElementById('errorMsg').innerHTML = `<div class="msg error">${e.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = '■ 停止';
+  }
+});
+
+// "檢視接線圖" (2026-09-02, extended 2026-09-03 to cover every segment at
+// once + a per-segment button): builds the ComfyUI workflow(s) for the
+// CURRENT on-screen settings (ref images/audio/music/steps/per-segment
+// continuity etc.) via the backend's build_workflow(), downloads as plain
+// .json file(s), and opens ComfyUI - ComfyUI's own "open saved workflow"
+// sidebar does NOT correctly load a bare API-format json (confirmed: loads
+// 0 nodes) - only its drag-and-drop / file-open handler auto-detects and
+// converts it, so each downloaded file has to be dragged onto the ComfyUI
+// canvas by hand; there's no way to fully automate that last step from a
+// cross-origin page.
+//
+// Always sends every segment's prompt (not just the one(s) being
+// downloaded) - continuity for segment i>0 depends on the backend knowing
+// the full segment list even though it can only ever resolve a REAL
+// continuation frame once that prior segment has actually finished
+// rendering (a project preview never has, so that slot just comes back
+// empty - _continuation_ref_images degrades gracefully, same as the
+// preflight validator).
+async function fetchWorkflowPreviews() {
+  const refImageNames = selectedRefLibraryImages.map(x => x.filename);
+  const refAudioName = currentRefAudioFilename || (selectedVoiceProfile ? selectedVoiceProfile.comfy_filename : '');
+  const bgMusicName = currentBgMusicFilename || '';
+  const refVideoName = currentRefVideoFilename || '';
+  const stepsOpt = document.querySelector('#stepsToggle .toggle-opt.on');
+
+  const fd = new FormData();
+  fd.append('segment_prompts', JSON.stringify(segmentRows.map(buildPreviewPrompt)));
+  fd.append('duration_minutes', document.getElementById('durationMinutes').value || 0.25);
+  fd.append('segment_length_seconds', document.getElementById('segmentLength').value || 15);
+  fd.append('ref_image_filenames', JSON.stringify(refImageNames));
+  fd.append('ref_audio_filename', refAudioName);
+  fd.append('bg_music_filename', bgMusicName);
+  fd.append('ref_video_filename', refVideoName);
+  fd.append('use_ref_video_direct', document.getElementById('useRefVideoDirect').checked);
+  fd.append('width', 864);
+  fd.append('height', 480);
+  const seedVal = document.getElementById('seedInput').value.trim();
+  if (seedVal) fd.append('seed', seedVal);
+  fd.append('ref_image_size', document.getElementById('refImageSizeSelect').value);
+  fd.append('steps', stepsOpt ? stepsOpt.dataset.steps : 8);
+  // If this project has already actually been generated, use its real
+  // segments (with real output_file paths) for the continuity lookup
+  // instead of always assuming nothing has run yet (2026-09-03 bug fix -
+  // Seg 2's continuation-from-Seg-1's-last-frame slot was coming back
+  // empty even for an already-completed job).
+  if (currentJobId) fd.append('job_id', currentJobId);
+
+  const res = await authFetch(`${API}/api/prompt/workflow-preview`, { method: 'POST', body: fd });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || '產生失敗');
+  return body.segments; // [{index, workflow}, ...]
+}
+
+function downloadWorkflowJson(workflow, filename) {
+  const blob = new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('workflowPreviewBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('workflowPreviewBtn');
+  const msg = document.getElementById('workflowPreviewMsg');
+  const origLabel = btn.textContent;
+  msg.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = '產生中...';
+  try {
+    const segments = await fetchWorkflowPreviews();
+    segments.forEach(({ index, workflow }) => {
+      downloadWorkflowJson(workflow, `h3-studio-seg${index + 1}-workflow.json`);
+    });
+    window.open('http://127.0.0.1:8188', '_blank');
+    msg.style.display = '';
+    msg.textContent = segments.length > 1
+      ? `已下載全部 ${segments.length} 段的 workflow json（h3-studio-seg1-workflow.json ~ seg${segments.length}）——把想看的那個檔案拖進剛開啟的 ComfyUI 畫布就會顯示完整接線圖（ComfyUI 存檔清單裡點開沒有用，一定要拖曳/開啟檔案；設定改了要重看就再按一次這個按鈕）`
+      : `已下載 h3-studio-seg1-workflow.json——把這個檔案拖進剛開啟的 ComfyUI 畫布就會顯示完整接線圖（ComfyUI 存檔清單裡點開沒有用，一定要拖曳/開啟檔案；設定改了要重看就再按一次這個按鈕）`;
+  } catch (e) {
+    msg.style.display = '';
+    msg.textContent = `產生失敗：${e.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+});
+
+// Ticks the generateBtn countdown every second, independent of the 4s poll
+// interval, so elapsed time visibly counts up while a job runs (2026-08-25:
+// consolidated here from a per-segment "Xs" display, which is gone now).
 function tickRunningTimers() {
-  document.querySelectorAll('.seg-time[data-started-at]').forEach(el => {
-    const startedAt = parseFloat(el.dataset.startedAt);
-    el.textContent = `${(Date.now() / 1000 - startedAt).toFixed(1)}s`;
+  const genBtn = document.getElementById('generateBtn');
+  if (genBtn.dataset.jobStartedAt) {
+    const elapsed = Math.floor(Date.now() / 1000 - parseFloat(genBtn.dataset.jobStartedAt));
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const ss = String(elapsed % 60).padStart(2, '0');
+    genBtn.textContent = `生成中... ${mm}:${ss}`;
+  }
+  document.querySelectorAll('[data-seg-generate][data-seg-started-at]').forEach(btn => {
+    const elapsed = Math.floor(Date.now() / 1000 - parseFloat(btn.dataset.segStartedAt));
+    btn.textContent = `生成中（${elapsed}s）`;
   });
 }
 setInterval(tickRunningTimers, 1000);
+
+// Drives the generateBtn countdown above - set to the job's earliest
+// segment start time while running, cleared on any terminal state so the
+// next tickRunningTimers() call stops overwriting the button text.
+const TERMINAL_JOB_STATUSES = ['done', 'error', 'cancelled', 'segments_ready'];
+function setGenerateBtnTimer(job) {
+  const genBtn = document.getElementById('generateBtn');
+  const firstStarted = job && job.segments && job.segments.find(s => s.started_at != null)?.started_at;
+  // 2026-08-26: this used to exclude only done/error/cancelled, missing
+  // segments_ready - the app's actual normal stopping point (jobs are
+  // deliberately left there instead of auto-concatenating, see
+  // /api/jobs/{id}/concatenate). So the button kept ticking up forever
+  // after any job that stopped at a checkpoint (reported by the user:
+  // "生成中... 322:05" - the countdown just never stopped).
+  if (firstStarted && !TERMINAL_JOB_STATUSES.includes(job.status)) {
+    genBtn.dataset.jobStartedAt = firstStarted;
+  } else {
+    delete genBtn.dataset.jobStartedAt;
+  }
+}
 
 // Populates the shared fields + segment rows from a job's stored
 // prompt(s) - used both when resuming and when loading a saved project's
@@ -1826,18 +3283,82 @@ function loadJobPromptsIntoForm(j) {
   document.getElementById('subjectDefinitions').value = first.subject;
   document.getElementById('subjectDefinitions').dataset.auto = 'false';
   document.getElementById('summaryInput').value = first.summary;
-  document.getElementById('musicInput').value = first.music || 'N/A';
+  document.getElementById('musicInput').value = normalizeMusicValue(first.music);
   segmentRows = prompts.map(p => {
     const parts = parseTemplateIntoParts(p);
     return { shot: parts.shot, camera: parts.camera, soundscape: parts.soundscape };
   });
+  const pastRefPreview = document.getElementById('refImagesPreview');
   if (j.ref_image_filenames && j.ref_image_filenames.length) {
-    document.getElementById('refImagesPreview').innerHTML = j.ref_image_filenames.map((name, i) => `
+    pastRefPreview.style.display = '';
+    pastRefPreview.innerHTML = j.ref_image_filenames.map((name, i) => `
       <div class="ref-image-slot">
         <img src="${mediaUrl(API + '/api/uploads/image/' + encodeURIComponent(name))}" alt="人物${i + 1}" />
         <span class="ref-image-tag">人物${i + 1}</span>
-      </div>`).join('') + `<div class="hint-note" style="width:100%;font-size:11px;color:var(--text-faint)">（上次送出時使用的參考圖，重新選檔會取代）</div>`;
+      </div>`).join('') + `<div class="hint-note" style="width:100%;font-size:11px;color:var(--text-faint)">（這個生成紀錄實際用的參考圖，跟上面目前選取的圖庫人物是分開的）</div>`;
+  } else {
+    pastRefPreview.style.display = 'none';
+    pastRefPreview.innerHTML = '';
   }
+}
+
+// Shows/hides the 續跑/合成 action row based on the job's actual segment
+// states - a segments_ready job (whether it finished a partial run, hit an
+// error, or had one segment hand-regenerated) always needs the caller to
+// decide "keep going" vs "combine now", never both automatically.
+function updateJobActionBar(j) {
+  const bar = document.getElementById('jobActionBar');
+  const resumeBtn = document.getElementById('resumeJobBtn');
+  const concatBtn = document.getElementById('concatenateJobBtn');
+  const hint = document.getElementById('jobActionHint');
+  const stillWorking = j && ['queued', 'running', 'concatenating'].includes(j.status);
+  if (!j || !j.segments || !j.segments.length || stillWorking) {
+    bar.style.display = 'none';
+    return;
+  }
+  const unfinished = j.segments.filter(s => s.status !== 'done');
+  const allDone = unfinished.length === 0;
+  if (unfinished.length === j.segments.length && j.status === 'done') {
+    // shouldn't happen, but don't show an empty bar if there's nothing to do
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  resumeBtn.style.display = unfinished.length ? '' : 'none';
+  resumeBtn.disabled = false;
+  resumeBtn.textContent = '▶ 續跑剩餘段落';
+  concatBtn.style.display = allDone && !j.has_final_video ? '' : 'none';
+  concatBtn.disabled = false;
+  concatBtn.textContent = '🎬 合成 Final 影片';
+  hint.textContent = j.error ? j.error
+    : allDone ? (j.has_final_video ? '已合成完成' : '所有段落已完成，尚未合成')
+    : `還有段落未完成：Seg ${unfinished.map(s => s.index + 1).join(', ')}`;
+}
+
+// Patches one segment card's generate/stop/unqueue button state in place -
+// no innerHTML rebuild, so its <video> (if already done) never reloads/
+// flashes. Shared by pollJob() (whole-batch run) and pollSegmentRegenerate()
+// (single-segment) - both poll every few seconds and previously did a full
+// renderSegmentCards() on every tick, which fought tickRunningTimers()'s
+// 1s text updates (button flickered between "生成中..." and "生成中(Ns)")
+// and re-flashed every OTHER already-finished segment's video too
+// (2026-08-26, both reported by the user).
+function patchSegmentCardLiveState(idx, seg) {
+  const genBtn = document.querySelector(`[data-seg-generate="${idx}"]`);
+  const stopBtn = document.querySelector(`[data-seg-stop="${idx}"]`);
+  const unqueueBtn = document.querySelector(`[data-seg-unqueue="${idx}"]`);
+  if (genBtn) {
+    genBtn.disabled = seg.status === 'running' || seg.status === 'queued' || formLocked;
+    if (seg.status === 'queued') genBtn.textContent = '排隊中...';
+    else if (seg.status === 'running' && !genBtn.dataset.segStartedAt) genBtn.textContent = '生成中...';
+    if (seg.status === 'running' && seg.started_at) {
+      genBtn.dataset.segStartedAt = seg.started_at; // tickRunningTimers() ticks the "(Ns)" suffix every 1s
+    } else {
+      delete genBtn.dataset.segStartedAt;
+    }
+  }
+  if (stopBtn) stopBtn.style.display = seg.status === 'running' ? '' : 'none';
+  if (unqueueBtn) unqueueBtn.style.display = seg.status === 'queued' ? '' : 'none';
 }
 
 function pollJob(jobId, btn) {
@@ -1851,27 +3372,125 @@ function pollJob(jobId, btn) {
       localStorage.removeItem(ACTIVE_JOB_KEY);
       btn.disabled = false;
       btn.textContent = '開始生成';
+      delete btn.dataset.jobStartedAt;
       return;
     }
     const j = await res.json();
-    renderSegmentCards(j.segments);
+    // Only a full rebuild when a segment just reached a terminal state
+    // (its video needs to actually appear) - otherwise patch every card's
+    // button/stop/unqueue state in place, every tick, without touching
+    // anything that's already rendered (see patchSegmentCardLiveState()).
+    const prevSegments = lastLiveSegments || [];
+    const justFinished = j.segments.some((seg, i) => {
+      const prevStatus = prevSegments[i] && prevSegments[i].status;
+      return prevStatus !== seg.status && ['done', 'error', 'cancelled'].includes(seg.status);
+    });
+    lastLiveSegments = j.segments;
+    if (justFinished) {
+      renderSegmentCards(j.segments);
+    } else {
+      j.segments.forEach((seg, i) => patchSegmentCardLiveState(i, seg));
+    }
+    lastJobResponse = j;
+    renderGenerateResultCards(j);
+    setGenerateBtnTimer(j);
+    updateJobActionBar(j);
+    if (j.resolved_seed != null) {
+      document.getElementById('lastSeedHint').textContent = `這次實際用的 seed：${j.resolved_seed}`;
+    }
+    if (['done', 'segments_ready', 'error', 'cancelled'].includes(j.status)) {
+      // Was never reset once a job finished (2026-08-26, reported by the
+      // user - prompt fields stayed permanently read-only after
+      // generating until a full page reload). Re-render AFTER unlocking
+      // so the fields actually reflect it - the justFinished render above
+      // (if it ran this tick) still used the locked state.
+      formLocked = false;
+      renderSegmentCards(j.segments);
+    }
     if (j.status === 'done') {
       clearInterval(pollTimer);
       localStorage.removeItem(ACTIVE_JOB_KEY);
       btn.disabled = false;
       btn.textContent = '開始生成';
+      hideStopButton();
+      // Jump to the 生成 tab so the result is actually visible even if the
+      // user wandered off to another tab while it was running - but don't
+      // autoplay, showCombinedVideo() no longer sets that.
+      switchTab('right', 'generate');
       showCombinedVideo(jobId);
+      refreshJobHistory();
+    } else if (j.status === 'segments_ready') {
+      clearInterval(pollTimer);
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+      btn.disabled = false;
+      btn.textContent = '開始生成';
+      hideStopButton();
+      switchTab('right', 'generate');
       refreshJobHistory();
     } else if (j.status === 'error') {
       clearInterval(pollTimer);
       localStorage.removeItem(ACTIVE_JOB_KEY);
       btn.disabled = false;
       btn.textContent = '開始生成';
+      hideStopButton();
       document.getElementById('errorMsg').innerHTML = `<div class="msg error">生成失敗：${j.error || '未知錯誤'}</div>`;
+      refreshJobHistory();
+    } else if (j.status === 'cancelled') {
+      clearInterval(pollTimer);
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+      btn.disabled = false;
+      btn.textContent = '開始生成';
+      hideStopButton();
+      document.getElementById('errorMsg').innerHTML = `<div class="msg">已停止，暫存檔已清除；已完成的段落還在，可以在生成紀錄找到</div>`;
       refreshJobHistory();
     }
   }, 4000);
 }
+
+document.getElementById('resumeJobBtn').addEventListener('click', async () => {
+  if (!currentJobId) return;
+  const btn = document.getElementById('resumeJobBtn');
+  btn.disabled = true;
+  btn.textContent = '續跑中...';
+  try {
+    const fd = new FormData();
+    const runUpToVal = document.getElementById('runUpToSegmentInput').value.trim();
+    if (runUpToVal) fd.append('run_up_to_segment', runUpToVal);
+    const res = await authFetch(`${API}/api/jobs/${currentJobId}/resume`, { method: 'POST', body: fd });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '續跑失敗');
+    document.getElementById('jobActionBar').style.display = 'none';
+    localStorage.setItem(ACTIVE_JOB_KEY, currentJobId);
+    formLocked = true;
+    document.getElementById('generateBtn').disabled = true;
+    document.getElementById('generateBtn').textContent = '生成中...';
+    showStopButton();
+    pollJob(currentJobId, document.getElementById('generateBtn'));
+  } catch (e) {
+    document.getElementById('errorMsg').innerHTML = `<div class="msg error">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ 續跑剩餘段落';
+  }
+});
+
+document.getElementById('concatenateJobBtn').addEventListener('click', async () => {
+  if (!currentJobId) return;
+  const btn = document.getElementById('concatenateJobBtn');
+  btn.disabled = true;
+  btn.textContent = '合成中...';
+  try {
+    const res = await authFetch(`${API}/api/jobs/${currentJobId}/concatenate`, { method: 'POST' });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || '合成失敗');
+    localStorage.setItem(ACTIVE_JOB_KEY, currentJobId);
+    pollJob(currentJobId, document.getElementById('generateBtn'));
+  } catch (e) {
+    document.getElementById('errorMsg').innerHTML = `<div class="msg error">${e.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = '🎬 合成 Final 影片';
+  }
+});
 
 // On page (re)load, resume showing progress for whatever job was last
 // active - generation runs server-side and keeps going even if the
@@ -1886,7 +3505,7 @@ async function resumeActiveJob() {
       const res = await authFetch(`${API}/api/jobs/latest`);
       if (!res.ok) return;
       const j = await res.json();
-      if (['done', 'error'].includes(j.status)) return;
+      if (['done', 'error', 'cancelled', 'segments_ready'].includes(j.status)) return;
       jobId = j.job_id;
     } catch (e) { return; }
   }
@@ -1896,20 +3515,54 @@ async function resumeActiveJob() {
     if (!res.ok) { localStorage.removeItem(ACTIVE_JOB_KEY); return; }
     const j = await res.json();
     currentJobId = jobId;
-    formLocked = true;
-    loadJobPromptsIntoForm(j);
+    // Only actually running/queued jobs lock the form - an already-
+    // terminal job (done/error/cancelled/segments_ready) found here just
+    // means ACTIVE_JOB_KEY was stale (e.g. the page reloaded after the job
+    // had already finished), so leave editing unlocked. Unconditionally
+    // locking here used to leave the form permanently read-only with no
+    // unlock path at all (2026-08-26, reported by the user - "無法輸入文
+    // 字" after a generation had already finished).
+    const isTerminal = ['done', 'error', 'cancelled', 'segments_ready'].includes(j.status);
+    formLocked = !isTerminal;
+    // 2026-08-25 fix: this used to call loadJobPromptsIntoForm(j)
+    // unconditionally, overwriting segmentRows (the editable Chinese
+    // draft) with the job's actual submitted English prompts - harmless
+    // when no project was loaded (the original use case), but now that a
+    // project auto-loads on every page load, this ran in a race against
+    // that load and could silently clobber the real Chinese draft with
+    // English text, which then got auto-saved over the original. The
+    // project's own segment_rows (restored by applyProjectData) is
+    // authoritative - this function's only remaining job is resuming live
+    // progress display/polling for whatever's actually running.
     renderSegmentCards(j.segments);
+    lastJobResponse = j;
+    renderGenerateResultCards(j);
+    updateJobActionBar(j);
     switchTab('right', 'generate');
 
+    if (isTerminal) {
+      // Explicit reset, not just "leave it at its default HTML state" -
+      // a fresh page load should always start clean, but this guards
+      // against any stray dataset.jobStartedAt from before (belt-and-
+      // suspenders alongside the setGenerateBtnTimer() fix above).
+      btn.disabled = false;
+      btn.textContent = '開始生成';
+      delete btn.dataset.jobStartedAt;
+      hideStopButton();
+    }
     if (j.status === 'done') {
       localStorage.removeItem(ACTIVE_JOB_KEY);
       showCombinedVideo(jobId);
-    } else if (j.status === 'error') {
+    } else if (j.status === 'error' || j.status === 'cancelled' || j.status === 'segments_ready') {
       localStorage.removeItem(ACTIVE_JOB_KEY);
-      document.getElementById('errorMsg').innerHTML = `<div class="msg error">生成失敗：${j.error || '未知錯誤'}</div>`;
+      if (j.status === 'error') {
+        document.getElementById('errorMsg').innerHTML = `<div class="msg error">生成失敗：${j.error || '未知錯誤'}</div>`;
+      }
     } else {
       btn.disabled = true;
       btn.textContent = '生成中...';
+      setGenerateBtnTimer(j);
+      showStopButton();
       pollJob(jobId, btn);
     }
   } catch (e) {
@@ -1920,36 +3573,94 @@ async function resumeActiveJob() {
 }
 resumeActiveJob();
 
-// ---------- Job history (past generated videos) ----------
-async function refreshJobHistory() {
-  try {
-    const res = await authFetch(`${API}/api/jobs`);
-    if (!res.ok) return;
-    const { jobs } = await res.json();
-    const list = document.getElementById('jobHistoryList');
-    if (!jobs.length) { list.innerHTML = '<div class="empty-state">尚無生成紀錄</div>'; return; }
-    list.innerHTML = jobs.map(j => `
-      <div class="seg-row" style="grid-template-columns: 1fr auto auto">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeAttr(j.summary || j.job_id)}">${escapeHtml(j.summary || j.job_id)}</span>
-        <span class="pill ${j.status === 'done' ? 'done' : j.status === 'error' ? 'error' : 'running'}">${j.status}</span>
-        ${j.has_final_video ? `<button class="btn-download" data-open-job="${j.job_id}" type="button" style="padding:4px 10px">開啟</button>` : '<span></span>'}
-      </div>`).join('');
-    list.querySelectorAll('[data-open-job]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const jobId = btn.dataset.openJob;
-        const r = await authFetch(`${API}/api/jobs/${jobId}`);
-        const j = await r.json();
-        currentJobId = jobId;
-        formLocked = true;
-        loadJobPromptsIntoForm(j);
-        renderSegmentCards(j.segments);
-        switchTab('right', 'generate');
-        showCombinedVideo(jobId);
-      });
-    });
-  } catch (e) { /* non-critical */ }
+// ---------- Job history (this project's past generations only - not a
+// global list; each job_id lives in projectJobIds, saved/loaded as part
+// of the project itself) ----------
+function extractSummary(promptText) {
+  if (!promptText) return '';
+  for (const line of promptText.split('\n')) {
+    if (line.trim().toLowerCase().startsWith('summary:')) {
+      return line.split(':').slice(1).join(':').trim();
+    }
+  }
+  return promptText.slice(0, 60);
 }
-refreshJobHistory();
+
+// The "生成" tab starts as a single "尚未送出生成" message - the 3 detail
+// sections (submitted prompt / playback / job history) only make sense
+// once there's at least one job for this project, so they stay hidden
+// until then instead of showing 3 separate empty-states at once.
+function updateGenerateTabEmptyState() {
+  const hasAnyJob = projectJobIds.length > 0 || currentJobId != null;
+  document.getElementById('generateEmptyState').style.display = hasAnyJob ? 'none' : '';
+  document.getElementById('generateContentSections').style.display = hasAnyJob ? '' : 'none';
+}
+
+async function refreshJobHistory() {
+  updateGenerateTabEmptyState();
+  const list = document.getElementById('jobHistoryList');
+  if (!projectJobIds.length) { list.innerHTML = '<div class="empty-state">尚無生成紀錄</div>'; return; }
+
+  const rows = [];
+  for (const jobId of projectJobIds) {
+    try {
+      const res = await authFetch(`${API}/api/jobs/${jobId}`);
+      if (!res.ok) continue;
+      const j = await res.json();
+      const totalElapsed = (j.segments || []).reduce((sum, s) => sum + (s.elapsed || 0), 0);
+      const dateStr = j.created_at
+        ? new Date(j.created_at * 1000).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : '';
+      rows.push({
+        jobId, status: j.status, hasVideo: j.has_final_video, summary: extractSummary(j.prompt),
+        elapsedStr: totalElapsed > 0 ? `${Math.round(totalElapsed)}s` : '',
+        dateStr,
+      });
+    } catch (e) { /* skip - job unreachable right now */ }
+  }
+  if (!rows.length) { list.innerHTML = '<div class="empty-state">尚無生成紀錄</div>'; return; }
+
+  list.innerHTML = rows.map(r => `
+    <div class="seg-row" style="grid-template-columns: 1fr auto auto auto">
+      <div style="overflow:hidden">
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeAttr(r.summary || r.jobId)}">${escapeHtml(r.summary || r.jobId)}</div>
+        <div class="hint-note">${[r.dateStr, r.elapsedStr].filter(Boolean).join(' · ')}</div>
+      </div>
+      <span class="pill ${r.status === 'done' ? 'done' : r.status === 'error' ? 'error' : r.status === 'cancelled' ? 'cancelled' : r.status === 'segments_ready' ? 'segments-ready' : 'running'}">${
+        r.status === 'done' ? '完成' : r.status === 'error' ? '失敗' : r.status === 'cancelled' ? '已停止' : r.status === 'segments_ready' ? '待合成/續跑' : '生成中'
+      }</span>
+      ${(r.hasVideo || r.status === 'segments_ready') ? `<button class="btn-download" data-open-job="${r.jobId}" type="button" style="padding:4px 10px">開啟</button>` : '<span></span>'}
+      <button class="btn-download" data-remove-job="${r.jobId}" type="button" style="padding:4px 10px">刪除</button>
+    </div>`).join('');
+
+  list.querySelectorAll('[data-open-job]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const jobId = btn.dataset.openJob;
+      const r = await authFetch(`${API}/api/jobs/${jobId}`);
+      const j = await r.json();
+      currentJobId = jobId;
+      formLocked = true;
+      loadJobPromptsIntoForm(j);
+      renderSegmentCards(j.segments);
+      lastJobResponse = j;
+      renderGenerateResultCards(j);
+      updateJobActionBar(j);
+      switchTab('right', 'generate');
+      if (j.has_final_video) {
+        showCombinedVideo(jobId);
+      }
+    });
+  });
+  list.querySelectorAll('[data-remove-job]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const jobId = btn.dataset.removeJob;
+      if (!confirm('從這個專案的生成紀錄移除？（不會刪除實際影片檔案，要按「儲存」專案這個變更才會生效）')) return;
+      projectJobIds = projectJobIds.filter(id => id !== jobId);
+      if (currentJobId === jobId) currentJobId = null;
+      refreshJobHistory();
+    });
+  });
+}
 
 // ---------- Project management (save / load / new / clone / delete) ----------
 let currentProjectId = null;
@@ -1964,27 +3675,166 @@ function collectProjectData() {
     duration_minutes: document.getElementById('durationMinutes').value,
     segment_length_seconds: document.getElementById('segmentLength').value,
     segment_rows: segmentRows.map(r => ({ shot: r.shot, camera: r.camera, soundscape: r.soundscape })),
+    ref_image_library_ids: selectedRefLibraryImages.map(x => x.id),
+    ref_image_roles: selectedRefLibraryImages.map(x => ({ role: x.role || 'subject', shot: x.shot, frameType: x.frameType })),
+    voice_profile_id: selectedVoiceProfile ? selectedVoiceProfile.id : null,
+    ref_audio_filename: currentRefAudioFilename,
+    ref_audio_original_name: currentRefAudioOriginalName,
+    bg_music_filename: currentBgMusicFilename,
+    bg_music_original_name: currentBgMusicOriginalName,
+    ref_video_filename: currentRefVideoFilename,
+    ref_video_original_name: currentRefVideoOriginalName,
+    use_ref_video_direct: document.getElementById('useRefVideoDirect').checked,
+    job_ids: projectJobIds,
+    ai_generate_idea: document.getElementById('aiGenerateIdeaInput').value,
+    ai_generate_scope: aiGenerateScope,
+    reviewed_prompts: reviewedPrompts,
+    seed: document.getElementById('seedInput').value,
+    run_up_to_segment: document.getElementById('runUpToSegmentInput').value,
+    extracted_characters: extractedCharacters,
+    segment_seeds: segmentSeedInputs,
+    retention_level: document.getElementById('retentionLevelSelect').value,
+    ref_image_size: document.getElementById('refImageSizeSelect').value,
   };
 }
 
-function applyProjectData(data) {
+async function applyProjectData(data) {
   currentProjectId = data.id;
   document.getElementById('projectNameInput').value = data.name || '';
+
+  // Restore reference-image selection (with per-image role/shot/frameType),
+  // voice profile, and the ad-hoc audio/video attachments BEFORE computing
+  // subject_definitions' auto-flag below - defaultSubjectDefinitions() reads
+  // these globals (for the <Audio 1> line), so they have to be in place
+  // first. Roles are zipped by index before filtering missing library
+  // entries so a deleted library image doesn't shift the rest out of
+  // alignment.
+  const savedRoles = data.ref_image_roles || [];
+  selectedRefLibraryImages = (data.ref_image_library_ids || [])
+    .map((id, i) => {
+      const entry = refLibraryEntries.find(e => e.id === id);
+      if (!entry) return null;
+      const r = savedRoles[i] || {};
+      return { ...entry, role: r.role || 'subject', shot: r.shot, frameType: r.frameType };
+    })
+    .filter(Boolean);
+
+  selectedVoiceProfile = data.voice_profile_id
+    ? voiceProfileEntries.find(p => p.id === data.voice_profile_id) || null : null;
+  document.getElementById('selectedProfileHint').textContent = selectedVoiceProfile ? `使用中：${selectedVoiceProfile.name}` : '';
+  document.getElementById('voiceProfileSelect').value = selectedVoiceProfile ? selectedVoiceProfile.id : '';
+
+  currentRefAudioFilename = data.ref_audio_filename || null;
+  // ref_audio_original_name only exists on projects saved after 2026-09-02 -
+  // fall back to the internal storage filename for older projects that
+  // don't have it.
+  currentRefAudioOriginalName = data.ref_audio_original_name || currentRefAudioFilename;
+  document.getElementById('refAudioHint').textContent = currentRefAudioOriginalName ? `上次使用：${currentRefAudioOriginalName}（重新選檔會取代）` : '';
+  currentBgMusicFilename = data.bg_music_filename || null;
+  currentBgMusicOriginalName = data.bg_music_original_name || currentBgMusicFilename;
+  document.getElementById('bgMusicHint').textContent = currentBgMusicOriginalName ? `上次使用：${currentBgMusicOriginalName}（重新選檔會取代）` : '';
+  document.getElementById('bgMusicHintPrompt').textContent = currentBgMusicOriginalName ? `上次使用：${currentBgMusicOriginalName}（重新選檔會取代）` : '';
+  currentRefVideoFilename = data.ref_video_filename || null;
+  currentRefVideoOriginalName = data.ref_video_original_name || currentRefVideoFilename;
+  document.getElementById('refVideoHint').textContent = currentRefVideoOriginalName ? `上次使用：${currentRefVideoOriginalName}（重新選檔會取代）` : '';
+  document.getElementById('useRefVideoDirect').checked = !!data.use_ref_video_direct;
+
   document.getElementById('subjectDefinitions').value = data.subject_definitions || '';
-  document.getElementById('subjectDefinitions').dataset.auto = 'false';
+  // Only treat this as a hand-edited value (auto=false, never overwritten
+  // again) if it actually differs from what auto-fill would have produced
+  // for the saved ref-image selection. Otherwise leave it eligible for
+  // auto-sync, so selecting/swapping reference images after reloading a
+  // project still keeps subject_definitions in sync instead of silently
+  // going stale forever (2026-08-24 bug: this used to hard-code 'false'
+  // unconditionally on every load).
+  // An empty saved value is never a deliberate manual choice (there's
+  // nothing to preserve) - only a non-empty value that doesn't match the
+  // auto-generated shape counts as hand-edited.
+  const savedSubjects = data.subject_definitions || '';
+  const expectedAutoSubjects = defaultSubjectDefinitions(selectedRefLibraryImages);
+  document.getElementById('subjectDefinitions').dataset.auto =
+    (!savedSubjects || savedSubjects === expectedAutoSubjects) ? 'true' : 'false';
   document.getElementById('summaryInput').value = data.summary || '';
-  document.getElementById('musicInput').value = data.music || 'N/A';
+  const savedMusic = normalizeMusicValue(data.music);
+  const expectedAutoMusic = currentBgMusicFilename ? DEFAULT_MUSIC_VALUE : '';
+  document.getElementById('musicInput').value = savedMusic;
+  document.getElementById('musicInput').dataset.auto =
+    (!savedMusic || savedMusic === expectedAutoMusic) ? 'true' : 'false';
+  const aiIdeaEl = document.getElementById('aiGenerateIdeaInput');
+  aiIdeaEl.value = data.ai_generate_idea || '';
+  document.getElementById('aiGenerateCharCount').textContent = `${aiIdeaEl.value.length} 字`;
+  aiGenerateScope = data.ai_generate_scope || 'active';
+  const scopeToggle = document.getElementById('aiGenerateScopeToggle');
+  for (const c of scopeToggle.children) c.classList.toggle('on', c.dataset.scope === aiGenerateScope);
+  document.getElementById('seedInput').value = data.seed || '';
+  document.getElementById('runUpToSegmentInput').value = data.run_up_to_segment || '';
   document.getElementById('durationMinutes').value = data.duration_minutes || 0.25;
   document.getElementById('segmentLength').value = data.segment_length_seconds || 15;
   segmentRows = (data.segment_rows || []).map(r => ({ shot: r.shot || '', camera: r.camera || '', soundscape: r.soundscape || '' }));
   if (!segmentRows.length) segmentRows.push({ shot: '', camera: '', soundscape: '' });
+  reviewedPrompts = data.reviewed_prompts || {};
+  // Snapshot of each segment's fields exactly as loaded, so a segment card's
+  // "還原全部" button can revert hand-edits made during this session back to
+  // this point - independent of autosave, which keeps overwriting the
+  // persisted copy every 5s and would otherwise make "revert" a no-op.
+  loadedSegmentRowsSnapshot = segmentRows.map(r => ({ ...r }));
+  // durationMinutes/segmentLength were set via .value above with no 'input'
+  // event, so updateHints()'s derived "X分÷Y秒=N段" label never reran and
+  // was left showing whatever the previous project/default state had -
+  // recompute it here from the segment_rows actually just loaded (not from
+  // segmentCount()'s duration/length math, so it reflects reality even if
+  // duration/length don't divide evenly for some hand-edited older project).
+  document.getElementById('segmentCountHint').textContent =
+    `${document.getElementById('durationMinutes').value}分 ÷ ${document.getElementById('segmentLength').value}秒 = ${segmentRows.length} 段`;
+  document.getElementById('estLine').textContent =
+    `預估約 ${Math.round(segmentRows.length * 10)} 分鐘（每段約 10 分鐘，turbo LoRA，未啟用 SageAttention）`;
   formLocked = false;
   currentJobId = null;
+  lastLiveSegments = null;
   document.getElementById('generateBtn').disabled = !comfyUiAlive;
   document.getElementById('generateBtn').textContent = '開始生成';
   document.getElementById('playbackArea').innerHTML = '<div class="empty-state">生成完成後會顯示在這裡</div>';
   document.getElementById('playbackLabel').textContent = '尚未有影片';
+
+  extractedCharacters = data.extracted_characters || [];
+  segmentSeedInputs = data.segment_seeds || [];
+  document.getElementById('retentionLevelSelect').value = data.retention_level || 'fully_preserved';
+  document.getElementById('refImageSizeSelect').value = data.ref_image_size || 'max';
+  updateRetentionAnalysisPreview();
+  renderCharacterList();
+
+  renderSelectedRefLibrary();
   renderSegmentCards();
+
+  // Backward-compatible with projects saved before job_ids existed (they
+  // only have the older single last_job_id field).
+  projectJobIds = data.job_ids || (data.last_job_id ? [data.last_job_id] : []);
+  await refreshJobHistory();
+
+  const lastId = projectJobIds[projectJobIds.length - 1];
+  if (lastId) {
+    try {
+      const res = await authFetch(`${API}/api/jobs/${lastId}`);
+      if (res.ok) {
+        const j = await res.json();
+        // A job sitting at segments_ready (stopped at a checkpoint, or
+        // finished but not yet manually concatenated) needs the same
+        // restoration as a finished one - previously only has_final_video
+        // was handled here, so reloading the page after a partial/
+        // checkpointed run left generateResultCards/jobActionBar empty
+        // even though the backend had real segment data.
+        if (j.has_final_video || j.status === 'segments_ready') {
+          currentJobId = lastId;
+          lastJobResponse = j;
+          renderGenerateResultCards(j);
+          updateJobActionBar(j);
+          renderSegmentCards(j.segments);
+          switchTab('right', 'generate');
+          if (j.has_final_video) showCombinedVideo(currentJobId);
+        }
+      }
+    } catch (e) { /* previous video just won't show - non-fatal */ }
+  }
 }
 
 async function refreshProjectSelect() {
@@ -1994,73 +3844,202 @@ async function refreshProjectSelect() {
   sel.innerHTML = '<option value="">（未載入專案）</option>' +
     projects.map(p => `<option value="${escapeAttr(p.id)}">${escapeHtml(p.name)}</option>`).join('');
 }
-refreshProjectSelect();
 
-document.getElementById('projectNewBtn').addEventListener('click', () => {
+// Selecting a project in the dropdown loads it immediately - no separate
+// "載入" click needed. Also used to auto-reopen the last-saved project on
+// page load (F5 / Ctrl+Shift+R), see the refreshProjectSelect() call below.
+async function loadProject(id) {
+  if (!id) { resetProjectForm(); return; }
+  const res = await authFetch(`${API}/api/projects/${id}`);
+  if (!res.ok) { alert('載入失敗'); return; }
+  await applyProjectData(await res.json());
+  markProjectSaved();
+  updateProjectStatusLine();
+}
+
+// Auto-reopen whatever project was last saved/loaded, so a page refresh
+// doesn't dump the user back at a blank "未載入專案" state.
+refreshProjectSelect().then(() => {
+  const lastId = localStorage.getItem(LAST_PROJECT_KEY);
+  const sel = document.getElementById('projectSelect');
+  if (lastId && sel.querySelector(`option[value="${lastId}"]`)) {
+    sel.value = lastId;
+    loadProject(lastId);
+  }
+});
+
+// ---------- Project status line (dirty-tracking) ----------
+let lastSavedProjectSnapshot = null;
+function markProjectSaved() {
+  lastSavedProjectSnapshot = JSON.stringify(collectProjectData());
+  if (currentProjectId) localStorage.setItem(LAST_PROJECT_KEY, currentProjectId);
+}
+function updateProjectStatusLine() {
+  const line = document.getElementById('projectStatusLine');
+  if (!currentProjectId) { line.textContent = '尚未載入專案（儲存後會建立新專案）'; return; }
+  const name = document.getElementById('projectNameInput').value.trim() || '未命名專案';
+  const dirty = lastSavedProjectSnapshot !== null && JSON.stringify(collectProjectData()) !== lastSavedProjectSnapshot;
+  line.textContent = dirty ? `目前：${name} ⚠ 有未儲存的改動` : `目前：${name}（已儲存）`;
+}
+setInterval(updateProjectStatusLine, 1500);
+
+function resetProjectForm() {
   currentProjectId = null;
   document.getElementById('projectSelect').value = '';
   document.getElementById('projectNameInput').value = '';
   document.getElementById('subjectDefinitions').value = '';
   document.getElementById('subjectDefinitions').dataset.auto = 'true';
   document.getElementById('summaryInput').value = '';
-  document.getElementById('musicInput').value = 'N/A';
+  document.getElementById('musicInput').value = '';
+  document.getElementById('musicInput').dataset.auto = 'true';
   document.getElementById('durationMinutes').value = '0.25';
   document.getElementById('segmentLength').value = '15';
   segmentRows = [];
+  loadedSegmentRowsSnapshot = [];
+  reviewedPrompts = {};
+  extractedCharacters = [];
+  segmentSeedInputs = [];
+  document.getElementById('retentionLevelSelect').value = 'fully_preserved';
+  document.getElementById('refImageSizeSelect').value = 'max';
+  document.getElementById('retentionAnalysisPreview').value = '';
+  renderCharacterList();
   formLocked = false;
   currentJobId = null;
+  lastJobResponse = null;
+  projectJobIds = [];
+  refreshJobHistory();
+  lastLiveSegments = null;
   document.getElementById('generateBtn').disabled = !comfyUiAlive;
   document.getElementById('generateBtn').textContent = '開始生成';
+  document.getElementById('generateResultCards').innerHTML = '';
+  document.getElementById('jobActionBar').style.display = 'none';
   document.getElementById('playbackArea').innerHTML = '<div class="empty-state">生成完成後會顯示在這裡</div>';
   document.getElementById('playbackLabel').textContent = '尚未有影片';
   document.getElementById('refImagesPreview').innerHTML = '';
-  document.getElementById('refImages').value = '';
+  document.getElementById('refImagesPreview').style.display = 'none';
   selectedRefLibraryImages = [];
   renderSelectedRefLibrary();
+
+  selectedVoiceProfile = null;
+  document.getElementById('selectedProfileHint').textContent = '';
+  document.getElementById('voiceProfileSelect').value = '';
+  document.getElementById('refAudio').value = '';
+  currentRefAudioFilename = null;
+  currentRefAudioOriginalName = null;
+  document.getElementById('refAudioHint').textContent = '';
+  document.getElementById('bgMusic').value = '';
+  currentBgMusicFilename = null;
+  currentBgMusicOriginalName = null;
+  document.getElementById('bgMusicHint').textContent = '';
+  document.getElementById('bgMusicHintPrompt').textContent = '';
+  document.getElementById('refVideo').value = '';
+  currentRefVideoFilename = null;
+  currentRefVideoOriginalName = null;
+  document.getElementById('refVideoHint').textContent = '';
+  document.getElementById('useRefVideoDirect').checked = false;
+
+  lastSavedProjectSnapshot = null;
+  updateProjectStatusLine();
   updateHints();
-});
+}
 
-document.getElementById('projectLoadBtn').addEventListener('click', async () => {
-  const id = document.getElementById('projectSelect').value;
-  if (!id) return;
-  const res = await authFetch(`${API}/api/projects/${id}`);
-  if (!res.ok) { alert('載入失敗'); return; }
-  applyProjectData(await res.json());
-});
+document.getElementById('projectNewBtn').addEventListener('click', resetProjectForm);
 
-document.getElementById('projectSaveBtn').addEventListener('click', async () => {
+document.getElementById('projectSelect').addEventListener('change', (e) => loadProject(e.target.value));
+
+// Shared by the manual 儲存 button and the auto-save timer below - a
+// project with no id yet just gets created on the first call and updated
+// in place on every call after that (currentProjectId sticks once set),
+// so auto-save is safe to run even before the user has ever saved by hand.
+async function saveCurrentProject() {
   const data = collectProjectData();
+  data.id = currentProjectId; // explicit: save OVER the currently loaded project, never silently fork a new one
   const res = await authFetch(`${API}/api/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) { alert('儲存失敗'); return; }
+  if (!res.ok) return false;
   const saved = await res.json();
   currentProjectId = saved.id;
   await refreshProjectSelect();
   document.getElementById('projectSelect').value = saved.id;
+  markProjectSaved();
+  updateProjectStatusLine();
+  return true;
+}
+
+document.getElementById('projectSaveBtn').addEventListener('click', async () => {
+  const ok = await saveCurrentProject();
+  if (!ok) alert('儲存失敗');
+});
+
+// ---------- Auto-save (2026-08-25): every 5s, if there's an unsaved
+// change AND the project actually has meaningful content (don't create
+// phantom empty projects the instant the page loads), save it the same
+// way the 儲存 button does. lastSavedProjectSnapshot===null means "never
+// saved even once" - dirty-checking against it would always be false, so
+// that case is treated as dirty on its own as long as there's real content. ----------
+let autoSaveInFlight = false;
+function hasUnsavedMeaningfulContent() {
+  const hasContent = document.getElementById('projectNameInput').value.trim()
+    || document.getElementById('summaryInput').value.trim()
+    || document.getElementById('subjectDefinitions').value.trim()
+    || segmentRows.some(r => r.shot.trim());
+  if (!hasContent) return false;
+  if (lastSavedProjectSnapshot === null) return true;
+  return JSON.stringify(collectProjectData()) !== lastSavedProjectSnapshot;
+}
+setInterval(async () => {
+  if (autoSaveInFlight || !hasUnsavedMeaningfulContent()) return;
+  autoSaveInFlight = true;
+  try { await saveCurrentProject(); } finally { autoSaveInFlight = false; }
+}, 5000);
+
+// Save As: persist the current on-screen state as a brand new project,
+// without touching/clearing the form - becomes the new "current" project.
+document.getElementById('projectSaveAsBtn').addEventListener('click', async () => {
+  const name = prompt('另存新檔的專案名稱：', document.getElementById('projectNameInput').value.trim() || '未命名專案');
+  if (name == null) return; // cancelled
+  const data = collectProjectData();
+  data.id = null; // force a new project id server-side
+  data.name = name.trim() || '未命名專案';
+  const res = await authFetch(`${API}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) { alert('另存失敗'); return; }
+  const saved = await res.json();
+  currentProjectId = saved.id;
+  document.getElementById('projectNameInput').value = saved.name;
+  await refreshProjectSelect();
+  document.getElementById('projectSelect').value = saved.id;
+  markProjectSaved();
+  updateProjectStatusLine();
 });
 
 document.getElementById('projectCloneBtn').addEventListener('click', async () => {
-  const id = document.getElementById('projectSelect').value;
-  if (!id) { alert('請先選擇要複製的專案'); return; }
-  const res = await authFetch(`${API}/api/projects/${id}/clone`, { method: 'POST' });
+  if (!currentProjectId) { alert('請先載入要複製的專案'); return; }
+  const res = await authFetch(`${API}/api/projects/${currentProjectId}/clone`, { method: 'POST' });
   if (!res.ok) { alert('複製失敗'); return; }
   const cloned = await res.json();
   await refreshProjectSelect();
   document.getElementById('projectSelect').value = cloned.id;
-  applyProjectData(cloned);
+  await applyProjectData(cloned);
+  markProjectSaved();
+  updateProjectStatusLine();
 });
 
 document.getElementById('projectDeleteBtn').addEventListener('click', async () => {
-  const id = document.getElementById('projectSelect').value;
-  if (!id) return;
+  if (!currentProjectId) { alert('目前沒有載入專案'); return; }
   if (!confirm('確定刪除這個專案？')) return;
-  await authFetch(`${API}/api/projects/${id}`, { method: 'DELETE' });
-  if (currentProjectId === id) currentProjectId = null;
+  await authFetch(`${API}/api/projects/${currentProjectId}`, { method: 'DELETE' });
   await refreshProjectSelect();
+  resetProjectForm();
 });
+
+switchTab('right', 'content'); // content tab is "on" by default in HTML, but the block still needs its first placement - deferred to here (see comment near the other tab-bar setup) so `segmentRows` is past its temporal dead zone
 </script>
 </body>
 </html>

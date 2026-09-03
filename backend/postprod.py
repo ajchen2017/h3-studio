@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, Form, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 
 import auth
-from comfy_client import queue_via_prompt_api, get_history, check_comfyui_alive
+from comfy_client import queue_via_prompt_api, get_history, check_comfyui_alive, ensure_comfyui_memory_healthy
 from foley_client import build_video_prompt
 
 router = APIRouter(prefix="/api/postprod")
@@ -263,6 +263,7 @@ def _run_sfx(sid: str, prompt: str, negative_prompt: str, cfg_scale: float, step
             seed=seed if seed is not None else int(time.time()),
             filename_prefix=f"audio/h3studio_postprod_{sid}_sfx",
         )
+        ensure_comfyui_memory_healthy()
         prompt_id = queue_via_prompt_api(wf, client_id=f"h3studio-postprod-{sid}")
         sfx["prompt_id"] = prompt_id
         _save(sid)
@@ -311,6 +312,10 @@ async def generate_sfx(
     alive, detail = check_comfyui_alive()
     if not alive:
         return JSONResponse({"error": f"ComfyUI 目前無法連線（{detail}），請確認 ComfyUI 是否正在執行後再試一次。"}, status_code=503)
+    try:
+        ensure_comfyui_memory_healthy()
+    except RuntimeError as e:
+        return JSONResponse({"error": str(e)}, status_code=503)
 
     s["sfx_pending"] = {"status": "queued", "prompt": prompt, "audio_file": None, "error": None, "started_at": time.time()}
     _save(sid)

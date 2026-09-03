@@ -10,6 +10,7 @@ DURATION_NODE_ID = "132"
 RESOLUTION_NODE_ID = "115"
 SAVE_NODE_ID = "92"
 SEED_NODE_ID = "129"
+SCHEDULER_NODE_ID = "124"
 IMAGE_LOADER_IDS = ["137", "139", "141"]
 AUDIO_LOADER_ID = "142"
 MUSIC_LOADER_ID = "148"
@@ -20,6 +21,38 @@ GET_VIDEO_COMPONENTS_ID = "144"
 def _load_template() -> dict:
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def get_model_info() -> dict:
+    """Read the model filenames straight out of the workflow template - the
+    single source of truth for what's actually running, so the frontend's
+    model-reference display never drifts out of sync with a future
+    model/LoRA swap. VAELoader appears twice (video + audio) - order in the
+    template happens to be video then audio, so that's used to tell them
+    apart rather than guessing from the filename."""
+    template = _load_template()
+    unet_name = None
+    lora_name = None
+    clip_name = None
+    vae_names = []
+    for node in template.values():
+        inputs = node.get("inputs", {})
+        class_type = node.get("class_type")
+        if class_type == "UNETLoader":
+            unet_name = inputs.get("unet_name")
+        elif class_type == "LoraLoaderModelOnly":
+            lora_name = inputs.get("lora_name")
+        elif class_type == "CLIPLoader":
+            clip_name = inputs.get("clip_name")
+        elif class_type == "VAELoader":
+            vae_names.append(inputs.get("vae_name"))
+    return {
+        "unet_name": unet_name,
+        "lora_name": lora_name,
+        "clip_name": clip_name,
+        "vae_video_name": vae_names[0] if len(vae_names) > 0 else None,
+        "vae_audio_name": vae_names[1] if len(vae_names) > 1 else None,
+    }
 
 
 def build_workflow(
@@ -33,12 +66,22 @@ def build_workflow(
     height=480,
     duration_seconds=15,
     seed=None,
+    ref_image_size="max",
     filename_prefix="video/h3studio",
+    steps=8,
 ):
     """Build a ComfyUI API-format prompt dict for one segment.
 
+    steps: BasicScheduler step count for the turbo LoRA - 8 is the
+        official/safe default; 4 is faster (~40% less wall-clock) but only
+        validated so far for front-facing face/dialogue shots, not hand
+        gestures or complex-geometry scenes (2026-09-02 A/B test).
     ref_image_filenames: filenames already uploaded into ComfyUI's input/
         folder (up to 3 people).
+    ref_image_size: 'match' downscales each ref image to the generation's
+        pixel area (faster); 'max' uses the reference pipeline's 2048px
+        short edge for best identity fidelity (node's own tooltip - can be
+        several times slower, though observed cost has been mild so far).
     ref_audio_filename: single voice reference filename, wired to
         ref_audio_0 (optional).
     bg_music_filename: background-music reference, wired to the separate
@@ -66,6 +109,8 @@ def build_workflow(
     data[DURATION_NODE_ID]["inputs"]["value"] = duration_seconds
     data[RESOLUTION_NODE_ID]["inputs"]["megapixels"] = round((width * height) / 1_000_000, 3)
     data[SAVE_NODE_ID]["inputs"]["filename_prefix"] = filename_prefix
+    r2v_inputs["ref_image_size"] = ref_image_size
+    data[SCHEDULER_NODE_ID]["inputs"]["steps"] = steps
     if seed is not None:
         data[SEED_NODE_ID]["inputs"]["noise_seed"] = seed
 

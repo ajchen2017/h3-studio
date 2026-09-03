@@ -1,9 +1,83 @@
 import asyncio
 import json
+import subprocess
+import time
 import urllib.error
 import urllib.request
 
+import psutil
+
 COMFY_URL = "http://127.0.0.1:8188"
+
+# 2026-08-24 incident: ComfyUI's committed memory grew from a clean ~1-2GB
+# baseline to 27GB, then to 51GB across two separate generation attempts,
+# both crashing with "HostBuffer.read_file_slice failed" once Windows'
+# commit charge got critically tight (>90%) - the async weight-offload /
+# pinned-memory path (now disabled by default in start_comfyui.bat) looked
+# like the source. This threshold is a safety net regardless of whether
+# that flag change fully fixes the leak: never start a job on top of an
+# already-bloated ComfyUI process.
+COMFY_MEMORY_GUARD_GB = 15
+COMFY_TASK_NAME = "H3Studio-ComfyUI"
+
+
+def _find_comfyui_process():
+    for p in psutil.process_iter(["pid", "name", "exe"]):
+        try:
+            exe = (p.info.get("exe") or "").lower()
+            # Windows paths are case-insensitive on disk but this folder's
+            # actual casing varies by context ("comfyUI" vs "ComfyUI") -
+            # compare lowercased rather than assume one.
+            if "comfyui" in exe and (p.info.get("name") or "").lower().startswith("python"):
+                return p
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return None
+
+
+def comfyui_memory_gb() -> float | None:
+    """Windows commit-charge footprint of the ComfyUI process (matches
+    Task Manager's 'Commit size' / PowerShell's PagedMemorySize64) - None
+    if the process isn't found (not our job to start it from cold here)."""
+    proc = _find_comfyui_process()
+    if not proc:
+        return None
+    try:
+        return proc.memory_info().pagefile / 1e9
+    except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
+        return None
+
+
+def restart_comfyui_and_wait(timeout=90) -> bool:
+    proc = _find_comfyui_process()
+    if proc:
+        try:
+            proc.kill()
+            proc.wait(timeout=10)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+            pass
+    subprocess.run(["schtasks", "/Run", "/TN", COMFY_TASK_NAME], capture_output=True)
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        alive, _ = check_comfyui_alive(timeout=2)
+        if alive:
+            return True
+        time.sleep(3)
+    return False
+
+
+def ensure_comfyui_memory_healthy():
+    """Call before queuing a prompt. Restarts ComfyUI first if its own
+    memory footprint is already past COMFY_MEMORY_GUARD_GB, so a job never
+    starts on top of an already-bloated process. Raises RuntimeError if a
+    needed restart doesn't come back up in time."""
+    mem_gb = comfyui_memory_gb()
+    if mem_gb is None or mem_gb <= COMFY_MEMORY_GUARD_GB:
+        return
+    if not restart_comfyui_and_wait():
+        raise RuntimeError(
+            f"ComfyUI 記憶體過高（{mem_gb:.1f}GB），自動重啟後逾時未恢復，請手動檢查"
+        )
 
 
 def flatten_and_queue(workflow_ui_json: dict) -> str:
@@ -37,6 +111,18 @@ def queue_via_prompt_api(api_format_prompt: dict, client_id: str) -> str:
             detail = detail[:1500]
         raise RuntimeError(f"ComfyUI 拒絕此 workflow（HTTP {e.code}）：{detail}") from e
     return body["prompt_id"]
+
+
+def interrupt_current(timeout=10) -> None:
+    """Stops whatever ComfyUI is currently executing (the /interrupt
+    endpoint used manually during this session's Haiku-hallucination
+    incidents, e.g. `curl -X POST http://127.0.0.1:8188/interrupt`) - used
+    by the job "stop" button. Only ever one segment is actually queued at
+    a time (main.py's _run_job waits for each segment before queuing the
+    next), so there's no backlog to also clear."""
+    req = urllib.request.Request(f"{COMFY_URL}/interrupt", data=b"", method="POST")
+    with urllib.request.urlopen(req, timeout=timeout):
+        pass
 
 
 def check_comfyui_alive(timeout=3) -> tuple[bool, str]:
