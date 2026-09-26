@@ -5,6 +5,15 @@
 $wg = "C:\Program Files\WireGuard\wg.exe"
 $maxStaleSeconds = 150
 
+# A fully stopped service has no interface, so `wg show` below would just
+# fail every run and nothing would ever bring the tunnel back.
+$svc = Get-Service -Name 'WireGuardTunnel$gpuhost'
+if ($svc.Status -ne 'Running') {
+    Write-Output "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') tunnel service $($svc.Status) - starting"
+    Start-Service -Name 'WireGuardTunnel$gpuhost'
+    exit 0
+}
+
 $output = & $wg show gpuhost latest-handshakes 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Output "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') wg show failed: $output"

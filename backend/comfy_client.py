@@ -47,7 +47,9 @@ def comfyui_memory_gb() -> float | None:
         return None
 
 
-def restart_comfyui_and_wait(timeout=90) -> bool:
+# A cold ComfyUI boot (custom nodes + first model scan) has been measured
+# taking well over 90s on this machine.
+def restart_comfyui_and_wait(timeout=300) -> bool:
     proc = _find_comfyui_process()
     if proc:
         try:
@@ -120,10 +122,20 @@ def _queue_ids(entries: list) -> set:
 
 def cancel_prompt(prompt_id: str) -> None:
     """Cancels only this prompt. ComfyUI is shared with the music project, so
-    a bare /interrupt would kill whatever else happens to be executing."""
-    _post_json("/queue", {"delete": [prompt_id]})
-    if prompt_id in _queue_ids(get_queue().get("queue_running", [])):
-        _post_json("/interrupt", {"prompt_id": prompt_id})
+    a bare /interrupt would kill whatever else happens to be executing.
+    A prompt moving from pending to running is briefly in neither list, so
+    keep checking until it has been absent several times in a row."""
+    absent = 0
+    for _ in range(40):
+        _post_json("/queue", {"delete": [prompt_id]})
+        q = get_queue()
+        if prompt_id in _queue_ids(q.get("queue_running", [])):
+            _post_json("/interrupt", {"prompt_id": prompt_id})
+            return
+        absent = 0 if prompt_id in _queue_ids(q.get("queue_pending", [])) else absent + 1
+        if absent >= 4:
+            return
+        time.sleep(0.5)
 
 
 def wait_for_prompt(prompt_id: str, should_cancel=None, on_tick=None, poll_interval=5) -> dict | None:
