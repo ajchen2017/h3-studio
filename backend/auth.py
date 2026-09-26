@@ -140,6 +140,9 @@ def check_password(candidate: str) -> bool:
 def set_password(new_password: str):
     cfg = _load_config()
     cfg["password_hash"] = hash_password(new_password)
+    # New secret = every previously issued token stops working, so a leaked
+    # token doesn't survive a password change/reset.
+    cfg["jwt_secret"] = secrets.token_hex(32)
     cfg.pop("reset_token", None)
     cfg.pop("reset_expires", None)
     _save_config(cfg)

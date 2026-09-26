@@ -96,7 +96,7 @@ def _translate(text: str) -> str:
     else:
         resp = _get_client().messages.create(
             model=MODEL,
-            max_tokens=1000,
+            max_tokens=4000,
             system=(
                 "Translate the given text to English. This is a literal translation task, not a "
                 "rewrite - preserve every concrete detail (objects, actions, numbers, names, "
@@ -109,6 +109,8 @@ def _translate(text: str) -> str:
             ),
             messages=[{"role": "user", "content": stashed}],
         )
+        if resp.stop_reason == "max_tokens":
+            raise RuntimeError("翻譯結果超過長度上限被截斷，請把這段內容拆短一點")
         result = resp.content[0].text.strip()
         # Safety net for the 2026-08-24 incident: a curl/argv encoding bug (not
         # Haiku) once sent genuinely corrupted bytes here, and instead of
@@ -410,7 +412,7 @@ def generate_shot_draft(
     )
     continuity_note = (
         f" Tell one continuous story across all {num_segments} segments - segment 2 picks up where "
-        "segment 1 left off, and so on, rather than {num_segments} unrelated scenes."
+        f"segment 1 left off, and so on, rather than {num_segments} unrelated scenes."
         if num_segments > 1 else ""
     )
 
@@ -447,6 +449,8 @@ def generate_shot_draft(
         ),
         messages=[{"role": "user", "content": idea}],
     )
+    if resp.stop_reason == "max_tokens":
+        raise RuntimeError(f"Haiku 回覆超過長度上限被截斷（{num_segments} 段一次產生太多），請減少段數分批產生")
     result = resp.content[0].text.strip()
     summary_match = _SUMMARY_PATTERN.search(result)
     summary = summary_match.group(1).strip() if summary_match else ""

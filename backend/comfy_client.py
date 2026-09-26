@@ -1,4 +1,3 @@
-import asyncio
 import json
 import subprocess
 import time
@@ -80,19 +79,6 @@ def ensure_comfyui_memory_healthy():
         )
 
 
-def flatten_and_queue(workflow_ui_json: dict) -> str:
-    """Submit a UI-format workflow graph to ComfyUI by asking its own
-    frontend graph object to flatten + queue it. Returns the ComfyUI
-    system prompt_id.
-
-    We don't hand-roll the UI->API graph flattening (subgraphs, autogrow
-    inputs, etc. make that error-prone) - instead this talks to ComfyUI's
-    documented queue endpoint using a client id, exactly like the web UI
-    does, but from the backend process directly.
-    """
-    raise NotImplementedError("use queue_via_browser or queue_via_prompt_api")
-
-
 def queue_via_prompt_api(api_format_prompt: dict, client_id: str) -> str:
     payload = json.dumps({"prompt": api_format_prompt, "client_id": client_id}).encode("utf-8")
     req = urllib.request.Request(f"{COMFY_URL}/prompt", data=payload, headers={"Content-Type": "application/json"})
@@ -113,16 +99,56 @@ def queue_via_prompt_api(api_format_prompt: dict, client_id: str) -> str:
     return body["prompt_id"]
 
 
-def interrupt_current(timeout=10) -> None:
-    """Stops whatever ComfyUI is currently executing (the /interrupt
-    endpoint used manually during this session's Haiku-hallucination
-    incidents, e.g. `curl -X POST http://127.0.0.1:8188/interrupt`) - used
-    by the job "stop" button. Only ever one segment is actually queued at
-    a time (main.py's _run_job waits for each segment before queuing the
-    next), so there's no backlog to also clear."""
-    req = urllib.request.Request(f"{COMFY_URL}/interrupt", data=b"", method="POST")
+def _post_json(path: str, body: dict, timeout=10) -> None:
+    req = urllib.request.Request(
+        f"{COMFY_URL}{path}", data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
     with urllib.request.urlopen(req, timeout=timeout):
         pass
+
+
+def get_queue(timeout=10) -> dict:
+    with urllib.request.urlopen(f"{COMFY_URL}/queue", timeout=timeout) as resp:
+        return json.loads(resp.read())
+
+
+def _queue_ids(entries: list) -> set:
+    # Each queue entry is [number, prompt_id, prompt, extra, outputs].
+    return {e[1] for e in entries if len(e) > 1}
+
+
+def cancel_prompt(prompt_id: str) -> None:
+    """Cancels only this prompt. ComfyUI is shared with the music project, so
+    a bare /interrupt would kill whatever else happens to be executing."""
+    _post_json("/queue", {"delete": [prompt_id]})
+    if prompt_id in _queue_ids(get_queue().get("queue_running", [])):
+        _post_json("/interrupt", {"prompt_id": prompt_id})
+
+
+def wait_for_prompt(prompt_id: str, should_cancel=None, on_tick=None, poll_interval=5) -> dict | None:
+    """Blocks until the prompt finishes and returns its history record, or
+    None if should_cancel() turned true. Raises RuntimeError if ComfyUI no
+    longer knows the prompt at all (e.g. it restarted mid-job) - otherwise
+    the job would sit in "running" forever."""
+    missing_checks = 0
+    while True:
+        if should_cancel and should_cancel():
+            return None
+        rec = get_history(prompt_id).get(prompt_id)
+        if rec and rec.get("status", {}).get("status_str") in ("success", "error"):
+            return rec
+        if rec is None:
+            q = get_queue()
+            known = _queue_ids(q.get("queue_running", [])) | _queue_ids(q.get("queue_pending", []))
+            missing_checks = 0 if prompt_id in known else missing_checks + 1
+            # Two consecutive misses: a prompt can briefly be in neither list
+            # while moving from the queue into history.
+            if missing_checks >= 2:
+                raise RuntimeError(f"ComfyUI 已找不到此任務 {prompt_id}（可能中途重啟過），請重新產生")
+        if on_tick:
+            on_tick()
+        time.sleep(poll_interval)
 
 
 def check_comfyui_alive(timeout=3) -> tuple[bool, str]:
@@ -143,17 +169,3 @@ def get_history(prompt_id: str) -> dict:
     req = urllib.request.Request(f"{COMFY_URL}/history/{prompt_id}")
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read())
-
-
-async def wait_for_completion(prompt_id: str, poll_interval=5, timeout=3600):
-    elapsed = 0
-    while elapsed < timeout:
-        hist = get_history(prompt_id)
-        rec = hist.get(prompt_id)
-        if rec:
-            status = rec.get("status", {})
-            if status.get("status_str") in ("success", "error"):
-                return rec
-        await asyncio.sleep(poll_interval)
-        elapsed += poll_interval
-    raise TimeoutError(f"prompt {prompt_id} did not finish within {timeout}s")

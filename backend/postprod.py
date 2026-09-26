@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, Form, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 
 import auth
-from comfy_client import queue_via_prompt_api, get_history, check_comfyui_alive, ensure_comfyui_memory_healthy
+from comfy_client import queue_via_prompt_api, check_comfyui_alive, ensure_comfyui_memory_healthy, wait_for_prompt
 from foley_client import build_video_prompt
 
 router = APIRouter(prefix="/api/postprod")
@@ -225,19 +225,6 @@ async def track_action(sid: str, track_num: int, action: str, user: dict = Depen
     return t
 
 
-def _wait_for_prompt(prompt_id, on_tick=None):
-    while True:
-        hist = get_history(prompt_id)
-        rec = hist.get(prompt_id)
-        if rec:
-            status = rec.get("status", {})
-            if status.get("status_str") in ("success", "error"):
-                return rec
-        if on_tick:
-            on_tick()
-        time.sleep(5)
-
-
 def _run_sfx(sid: str, prompt: str, negative_prompt: str, cfg_scale: float, steps: int, seed: int | None):
     s = SESSIONS[sid]
     sfx = s["sfx_pending"]
@@ -268,7 +255,7 @@ def _run_sfx(sid: str, prompt: str, negative_prompt: str, cfg_scale: float, step
         sfx["prompt_id"] = prompt_id
         _save(sid)
 
-        rec = _wait_for_prompt(prompt_id, on_tick=lambda: _save(sid))
+        rec = wait_for_prompt(prompt_id, on_tick=lambda: _save(sid))
         status = rec.get("status", {})
         if status.get("status_str") != "success":
             sfx["status"] = "error"

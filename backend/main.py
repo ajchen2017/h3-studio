@@ -2,6 +2,7 @@ import asyncio
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -10,7 +11,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request, UploadFile, File, Form
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,7 +22,7 @@ import auth
 import email_service
 from workflow_builder import build_workflow, get_model_info
 from character_workflow import build_character_image_workflow, CHECKPOINT_NAME as CHARACTER_PHOTO_CHECKPOINT_NAME
-from comfy_client import queue_via_prompt_api, get_history, check_comfyui_alive, ensure_comfyui_memory_healthy, interrupt_current
+from comfy_client import queue_via_prompt_api, get_history, check_comfyui_alive, ensure_comfyui_memory_healthy, cancel_prompt, wait_for_prompt
 import prompt_rewriter
 import postprod
 
@@ -98,13 +99,54 @@ app.include_router(postprod.router)
 
 JOBS: dict[str, dict] = {}
 
+_SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _safe_name(filename: str | None) -> str | None:
+    """Client-supplied filenames always refer to files inside ComfyUI's
+    input/ dir - strip any directory part so they can't point elsewhere."""
+    return Path(filename).name if filename else filename
+
+
+def _safe_names_json(raw: str) -> list[str]:
+    return [_safe_name(n) for n in json.loads(raw)]
+
+
+# ── Rate limiting (login / forgot-password are public on studio.umaya.tw) ──
+_RATE_HITS: dict[str, list[float]] = {}
+
+
+def _client_ip(request: Request) -> str:
+    # Behind Caddy (over WireGuard) every request arrives from the proxy, and
+    # Caddy overwrites X-Forwarded-For with the real client address.
+    host = request.client.host if request.client else ""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff and host in ("127.0.0.1", "10.10.10.1"):
+        return xff.split(",")[-1].strip()
+    return host
+
+
+def _rate_limited(key: str, limit: int, window: float) -> bool:
+    now = time.time()
+    hits = [t for t in _RATE_HITS.get(key, []) if now - t < window]
+    _RATE_HITS[key] = hits
+    return len(hits) >= limit
+
+
+def _record_hit(key: str):
+    _RATE_HITS.setdefault(key, []).append(time.time())
+
 
 # ── Auth ─────────────────────────────────────────────────────
 @app.post("/api/auth/login")
-async def login(password: str = Form(...)):
+async def login(request: Request, password: str = Form(...)):
+    key = f"login:{_client_ip(request)}"
+    if _rate_limited(key, 10, 900):
+        return JSONResponse({"error": "嘗試次數過多，請 15 分鐘後再試"}, status_code=429)
     if not auth.is_password_set():
         return JSONResponse({"error": "尚未設定密碼，請先用「忘記密碼」流程設定一組"}, status_code=400)
     if not auth.check_password(password):
+        _record_hit(key)
         return JSONResponse({"error": "密碼錯誤"}, status_code=401)
     token = auth.create_token({"sub": "admin"})
     return {"token": token}
@@ -126,11 +168,18 @@ async def change_password(
     if len(new_password) < 6:
         return JSONResponse({"error": "新密碼至少需要 6 個字元"}, status_code=400)
     auth.set_password(new_password)
-    return {"ok": True}
+    # set_password rotates the JWT secret (logs out every old token), so hand
+    # this session a fresh one.
+    return {"ok": True, "token": auth.create_token({"sub": "admin"})}
 
 
 @app.post("/api/auth/forgot-password")
-async def forgot_password():
+async def forgot_password(request: Request):
+    ip_key = f"forgot:{_client_ip(request)}"
+    if _rate_limited(ip_key, 3, 3600) or _rate_limited("forgot:all", 10, 3600):
+        return JSONResponse({"error": "申請次數過多，請一小時後再試"}, status_code=429)
+    _record_hit(ip_key)
+    _record_hit("forgot:all")
     token = auth.create_reset_token()
     reset_url = f"https://studio.umaya.tw/?reset_token={token}"
     html = email_service.build_reset_email_html(reset_url)
@@ -435,6 +484,7 @@ async def save_character_photo_to_library(
     filename like charpreview_xxx.png already sitting in COMFYUI_INPUT_DIR)
     into the ref-image library. Kept as a separate step so an unreviewed or
     rejected generation never ends up in the library automatically."""
+    filename = _safe_name(filename)
     src = COMFYUI_INPUT_DIR / filename
     if not src.exists() or not filename.startswith("charpreview_"):
         return JSONResponse({"error": "找不到預覽圖片，請重新生成"}, status_code=404)
@@ -553,25 +603,6 @@ def _postprocess_format(in_path: Path, out_path: Path, width: int, height: int, 
     ], check=True, capture_output=True)
 
 
-def _wait_for_prompt(prompt_id: str, job: dict, on_tick=None) -> dict | None:
-    """Returns the ComfyUI history record, or None if /api/jobs/{id}/stop
-    set job["cancel_requested"] while this was waiting - checked once per
-    poll tick, the actual GPU-side abort happens immediately via
-    interrupt_current() in the stop endpoint, not on this cadence."""
-    while True:
-        if job.get("cancel_requested"):
-            return None
-        hist = get_history(prompt_id)
-        rec = hist.get(prompt_id)
-        if rec:
-            status = rec.get("status", {})
-            if status.get("status_str") in ("success", "error"):
-                return rec
-        if on_tick:
-            on_tick()
-        time.sleep(5)
-
-
 def _job_n_segments(params: dict) -> int:
     segment_prompts = params.get("segment_prompts") or None
     if segment_prompts:
@@ -666,7 +697,7 @@ def _preflight_validate_segments(job_id: str, params: dict, end_index: int | Non
     workflow _generate_segment() would, POST it to ComfyUI's /prompt (which
     validates node inputs synchronously, before anything executes, and
     returns node_errors immediately if something's wrong), then immediately
-    interrupt_current() if it was accepted so it never actually samples.
+    cancel_prompt() it if it was accepted so it never actually samples.
     Segment index > 0's continuation-from-previous-frame reference doesn't
     exist yet at this point (nothing has run) - _continuation_ref_images()
     already degrades gracefully and just omits it, which is fine: this pass
@@ -704,10 +735,10 @@ def _preflight_validate_segments(job_id: str, params: dict, end_index: int | Non
                 steps=params.get("steps", 8),
             )
             try:
-                queue_via_prompt_api(wf, client_id=f"h3studio-preflight-{job_id}")
+                preflight_id = queue_via_prompt_api(wf, client_id=f"h3studio-preflight-{job_id}")
             except Exception as e:
                 return f"第 {i + 1} 段驗證失敗：{e}"
-            interrupt_current()
+            cancel_prompt(preflight_id)
         return None
     finally:
         for f in temp_files:
@@ -766,11 +797,13 @@ def _generate_segment(
     seg["prompt_id"] = prompt_id
     _save_job_state(job_id)
 
-    rec = _wait_for_prompt(prompt_id, job, on_tick=lambda: _save_job_state(job_id))
+    rec = wait_for_prompt(
+        prompt_id, should_cancel=lambda: job.get("cancel_requested"), on_tick=lambda: _save_job_state(job_id)
+    )
     if rec is None:
         # Cancelled via /api/jobs/{id}/stop - the GPU-side abort already
-        # happened (interrupt_current(), called from the stop endpoint
-        # before this loop even notices).
+        # happened (cancel_prompt(), called from the stop endpoint before
+        # this loop even notices).
         seg["status"] = "cancelled"
         _save_job_state(job_id)
         return False
@@ -1061,10 +1094,10 @@ async def workflow_preview(
     params = {
         "prompt": parsed_segment_prompts[0] if parsed_segment_prompts else "",
         "segment_prompts": parsed_segment_prompts or None,
-        "ref_image_filenames": json.loads(ref_image_filenames),
-        "ref_audio_filename": ref_audio_filename or None,
-        "bg_music_filename": bg_music_filename or None,
-        "ref_video_filename": ref_video_filename or None,
+        "ref_image_filenames": _safe_names_json(ref_image_filenames),
+        "ref_audio_filename": _safe_name(ref_audio_filename) or None,
+        "bg_music_filename": _safe_name(bg_music_filename) or None,
+        "ref_video_filename": _safe_name(ref_video_filename) or None,
         "use_ref_video_direct": use_ref_video_direct,
         "duration_minutes": duration_minutes,
         "segment_length_seconds": segment_length_seconds,
@@ -1185,7 +1218,7 @@ async def generate(
 
     job_id = uuid.uuid4().hex[:12]
     parsed_segment_prompts = json.loads(segment_prompts)
-    parsed_ref_images = json.loads(ref_image_filenames)
+    parsed_ref_images = _safe_names_json(ref_image_filenames)
     parsed_overrides = json.loads(prompt_overrides)
     parsed_ref_image_roles = json.loads(ref_image_roles)
     while len(parsed_ref_image_roles) < len(parsed_ref_images):
@@ -1225,9 +1258,9 @@ async def generate(
         "prompt": prompt,
         "segment_prompts": parsed_segment_prompts or None,
         "ref_image_filenames": parsed_ref_images,
-        "ref_audio_filename": ref_audio_filename or None,
-        "bg_music_filename": bg_music_filename or None,
-        "ref_video_filename": ref_video_filename or None,
+        "ref_audio_filename": _safe_name(ref_audio_filename) or None,
+        "bg_music_filename": _safe_name(bg_music_filename) or None,
+        "ref_video_filename": _safe_name(ref_video_filename) or None,
         "use_ref_video_direct": use_ref_video_direct,
         "duration_minutes": duration_minutes,
         "segment_length_seconds": segment_length_seconds,
@@ -1265,7 +1298,7 @@ def _apply_regenerate_overrides(job_id: str, job: dict, index: int, prompt: str 
     updated content too, not just this one regenerate call."""
     changed = False
     if ref_image_filenames is not None:
-        job["params"]["ref_image_filenames"] = json.loads(ref_image_filenames)
+        job["params"]["ref_image_filenames"] = _safe_names_json(ref_image_filenames)
         changed = True
     if prompt:
         segment_prompts = job["params"].get("segment_prompts")
@@ -1596,10 +1629,12 @@ async def stop_job(job_id: str, user: dict = Depends(auth.get_admin_user)):
     if job["status"] not in ("queued", "running"):
         return JSONResponse({"error": f"job is already {job['status']}, nothing to stop"}, status_code=400)
     job["cancel_requested"] = True
-    try:
-        interrupt_current()
-    except Exception:
-        pass  # ComfyUI unreachable - _run_job's own poll loop will still pick up cancel_requested and stop cleanly
+    running = next((s for s in job.get("segments") or [] if s.get("status") == "running" and s.get("prompt_id")), None)
+    if running:
+        try:
+            cancel_prompt(running["prompt_id"])
+        except Exception:
+            pass  # ComfyUI unreachable - _run_job's own poll loop will still pick up cancel_requested and stop cleanly
     return {"ok": True}
 
 
@@ -1653,6 +1688,8 @@ async def postprod_track1_from_job(sid: str, job_id: str = Form(...), user: dict
 
 
 def _project_path(project_id: str) -> Path:
+    if not _SAFE_ID.match(project_id or ""):
+        raise HTTPException(status_code=400, detail="invalid project id")
     return PROJECTS_DIR / f"{project_id}.json"
 
 
