@@ -947,7 +947,8 @@ async function checkComfyHealth() {
     dot.style.background = 'var(--success)';
     dot.style.boxShadow = '0 0 0 3px var(--success-soft)';
     text.textContent = 'ComfyUI 連線正常';
-    genBtn.disabled = false;
+    // This runs every 10s - never unlock the button mid-job.
+    genBtn.disabled = formLocked;
     genBtn.title = '';
   } else {
     chip.classList.remove('chip-live');
@@ -3794,6 +3795,9 @@ async function applyProjectData(data) {
   formLocked = false;
   currentJobId = null;
   lastLiveSegments = null;
+  // Stop tracking whatever job the previously shown project had running -
+  // its progress must not keep painting over this project's cards.
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   document.getElementById('generateBtn').disabled = !comfyUiAlive;
   document.getElementById('generateBtn').textContent = '開始生成';
   document.getElementById('playbackArea').innerHTML = '<div class="empty-state">生成完成後會顯示在這裡</div>';
@@ -3834,6 +3838,12 @@ async function applyProjectData(data) {
           renderSegmentCards(j.segments);
           switchTab('right', 'generate');
           if (j.has_final_video) showCombinedVideo(currentJobId);
+        } else if (j.status === 'running' || j.status === 'queued') {
+          // Still generating (possibly submitted from another tab/device):
+          // reattach live progress, otherwise currentJobId stays null and
+          // every finished segment shows "尚未完成" with no play button.
+          localStorage.setItem(ACTIVE_JOB_KEY, lastId);
+          await resumeActiveJob();
         }
       }
     } catch (e) { /* previous video just won't show - non-fatal */ }
