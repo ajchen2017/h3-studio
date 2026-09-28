@@ -3,7 +3,25 @@
 # UDP mapping even with PersistentKeepalive configured - the fix is just
 # forcing a fresh handshake).
 $wg = "C:\Program Files\WireGuard\wg.exe"
+$wireguardExe = "C:\Program Files\WireGuard\wireguard.exe"
+$permanentConf = "C:\Users\user\.wireguard\gpuhost.conf"
 $maxStaleSeconds = 150
+
+# The service stores the path of the .conf it was installed from; if that
+# file disappears (2026-09 outage: it had been installed from a temp dir
+# that got cleaned up) every start fails with "path not found", so
+# Start-Service below can never recover it. Reinstall from the permanent copy.
+$imagePath = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\WireGuardTunnel$gpuhost' -ErrorAction SilentlyContinue).ImagePath
+if ($imagePath -match '/tunnelservice\s+"?([^"]+?)"?\s*$') {
+    $currentConf = $Matches[1]
+    if (-not (Test-Path $currentConf) -and (Test-Path $permanentConf)) {
+        Write-Output "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') tunnel config $currentConf missing - reinstalling from $permanentConf"
+        & $wireguardExe /uninstalltunnelservice gpuhost
+        Start-Sleep -Seconds 3
+        & $wireguardExe /installtunnelservice $permanentConf
+        exit 0
+    }
+}
 
 # A fully stopped service has no interface, so `wg show` below would just
 # fail every run and nothing would ever bring the tunnel back.
